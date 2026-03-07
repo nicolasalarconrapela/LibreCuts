@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.9] - 2026-03-07
+### Fixed
+- Corregido `CustomVideoSeeker` para evitar doble callback de seek que provocaba saltos de tiempo erráticos.
+- Restauración automática: la posición/zoom guardados ahora se aplican solo una vez por sesión restaurada, evitando reposicionamientos inesperados posteriores.
+- Protección en `onDestroy` para no intentar liberar el reproductor si aún no fue inicializado.
+
 ## [1.0.8] - 2026-03-07
 ### Added
 - Guardado automático del proyecto (video actual editado, posición de reproducción y nivel de zoom) usando `SharedPreferences`.

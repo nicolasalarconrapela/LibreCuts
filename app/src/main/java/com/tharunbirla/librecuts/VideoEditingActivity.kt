@@ -86,6 +86,7 @@ class VideoEditingActivity : AppCompatActivity() {
 
     private var activeFFmpegSessions = mutableListOf<FFmpegSession>()
     private var isVideoLoaded = false
+    private var hasPendingRestoredPlaybackState = false
     private val coroutineScope = CoroutineScope(Dispatchers.Main + Job())
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -790,6 +791,7 @@ class VideoEditingActivity : AppCompatActivity() {
         restoreAutoSavedProjectState()
         if (videoUri == null) {
             videoUri = intent.getParcelableExtra("VIDEO_URI")
+            hasPendingRestoredPlaybackState = false
         }
         if (videoUri != null) {
             player = ExoPlayer.Builder(this).build()
@@ -809,7 +811,9 @@ class VideoEditingActivity : AppCompatActivity() {
                     if (state == Player.STATE_READY) {
                         isVideoLoaded = true
                         customVideoSeeker.setVideoDuration(player.duration)
-                        applyRestoredPlaybackState()
+                        if (hasPendingRestoredPlaybackState) {
+                            applyRestoredPlaybackState()
+                        }
                         updateDurationDisplay(player.currentPosition.toInt(), player.duration.toInt())
                     }
                 }
@@ -967,6 +971,7 @@ class VideoEditingActivity : AppCompatActivity() {
         }
 
         videoUri = savedFile
+        hasPendingRestoredPlaybackState = true
     }
 
     private fun applyRestoredPlaybackState() {
@@ -976,6 +981,7 @@ class VideoEditingActivity : AppCompatActivity() {
             player.seekTo(savedPosition)
         }
         applyPlayerZoom(savedZoom.coerceIn(1f, 4f))
+        hasPendingRestoredPlaybackState = false
     }
 
     private fun clearAutoSavedProjectState() {
@@ -999,7 +1005,9 @@ class VideoEditingActivity : AppCompatActivity() {
         persistAutoSavedProjectState()
         exportProgressJob?.cancel()
         dismissExportProgressDialog()
-        player.release()
+        if (::player.isInitialized) {
+            player.release()
+        }
         coroutineScope.cancel()
     }
 
