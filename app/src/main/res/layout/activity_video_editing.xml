@@ -35,6 +35,17 @@
             android:gravity="end">
 
             <ImageButton
+                android:id="@+id/btnSaveProject"
+                android:minWidth="48dp"
+                android:minHeight="48dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@drawable/ic_save_24"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/save_project_device"
+                android:layout_marginEnd="8dp"/>
+
+            <ImageButton
                 android:id="@+id/btnSave"
                 android:minWidth="48dp"
                 android:minHeight="48dp"

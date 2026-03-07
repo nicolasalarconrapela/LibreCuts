@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.15] - 2026-03-07
+### Added
+- Nuevo botón en la parte superior derecha para guardar explícitamente el proyecto en el dispositivo.
+- El guardado de proyecto ahora crea copia interna (`files/projects`) y copia pública en `Downloads/LibreCutsProjects`.
+
+### Fixed
+- Mejora de fiabilidad en guardado manual de proyecto para que aparezca tanto en Home como en almacenamiento del dispositivo.
+
 ## [1.0.14] - 2026-03-07
 ### Added
 - En Home ahora se listan los proyectos guardados detectados en `files/projects`.

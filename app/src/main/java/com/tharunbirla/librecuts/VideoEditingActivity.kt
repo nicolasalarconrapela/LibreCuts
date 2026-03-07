@@ -152,6 +152,7 @@ class VideoEditingActivity : AppCompatActivity() {
 
         // Set up button click listeners
         findViewById<ImageButton>(R.id.btnHome).setOnClickListener { promptSaveProjectBeforeExit() }
+        findViewById<ImageButton>(R.id.btnSaveProject).setOnClickListener { saveProjectToDeviceAction() }
         findViewById<ImageButton>(R.id.btnSave).setOnClickListener { saveAction() }
         findViewById<ImageButton>(R.id.btnTrim).setOnClickListener { trimAction() }
         findViewById<ImageButton>(R.id.btnText).setOnClickListener { textAction() }
@@ -588,6 +589,64 @@ class VideoEditingActivity : AppCompatActivity() {
         updateDurationDisplay(0, player.duration.toInt()) // Reset duration display
     }
 
+
+    private fun saveProjectToDeviceAction() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val currentVideoUri = videoUri
+                if (currentVideoUri == null) {
+                    withContext(Dispatchers.Main) { showError(getString(R.string.project_save_error)) }
+                    return@launch
+                }
+
+                val inputPath = getFilePathFromUri(currentVideoUri) ?: currentVideoUri.path
+                if (inputPath.isNullOrEmpty()) {
+                    withContext(Dispatchers.Main) { showError(getString(R.string.project_save_error)) }
+                    return@launch
+                }
+
+                val sourceFile = File(inputPath)
+                if (!sourceFile.exists()) {
+                    withContext(Dispatchers.Main) { showError(getString(R.string.project_save_error)) }
+                    return@launch
+                }
+
+                val projectName = "project_${System.currentTimeMillis()}.mp4"
+
+                val internalProjectDir = File(filesDir, "projects")
+                if (!internalProjectDir.exists()) {
+                    internalProjectDir.mkdirs()
+                }
+                val internalProjectFile = File(internalProjectDir, projectName)
+                sourceFile.copyTo(internalProjectFile, overwrite = true)
+
+                val publicProjectDir = File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                    "LibreCutsProjects"
+                )
+                if (!publicProjectDir.exists()) {
+                    publicProjectDir.mkdirs()
+                }
+                val publicProjectFile = File(publicProjectDir, projectName)
+                sourceFile.copyTo(publicProjectFile, overwrite = true)
+
+                MediaScannerConnection.scanFile(
+                    this@VideoEditingActivity,
+                    arrayOf(publicProjectFile.absolutePath),
+                    arrayOf("video/mp4"),
+                    null
+                )
+
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@VideoEditingActivity, getString(R.string.project_saved_device), Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    showError("${getString(R.string.project_save_error)}: ${e.message}")
+                }
+            }
+        }
+    }
 
     private fun saveAction() {
         lifecycleScope.launch {

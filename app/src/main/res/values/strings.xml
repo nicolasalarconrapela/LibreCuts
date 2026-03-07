@@ -41,4 +41,7 @@
     <string name="saved_projects">Proyectos guardados</string>
     <string name="no_saved_projects">Aún no hay proyectos guardados</string>
     <string name="project_open_error">No se pudo abrir el proyecto</string>
+    <string name="save_project_device">Guardar proyecto en dispositivo</string>
+    <string name="project_saved_device">Proyecto guardado en el dispositivo</string>
+    <string name="project_save_error">No se pudo guardar el proyecto</string>
 </resources>
