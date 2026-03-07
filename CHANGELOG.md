@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.14] - 2026-03-07
+### Added
+- En Home ahora se listan los proyectos guardados detectados en `files/projects`.
+- Al pulsar un proyecto guardado en Home, se abre directamente en el editor.
+
+### Changed
+- Cuando no hay proyectos guardados, Home muestra un mensaje contextual indicando que no hay proyectos todavía.
+
 ## [1.0.13] - 2026-03-07
 ### Fixed
 - Corregido guardado de proyectos: al elegir guardar al salir, ahora se crea un snapshot local del proyecto (`files/projects/autosave_project.mp4`) para restauración confiable.

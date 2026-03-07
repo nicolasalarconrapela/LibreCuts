@@ -38,4 +38,7 @@
     <string name="exit_editor_message">¿Deseas guardar el proyecto antes de salir?</string>
     <string name="save_project_exit">Guardar</string>
     <string name="discard_project_exit">No guardar</string>
+    <string name="saved_projects">Proyectos guardados</string>
+    <string name="no_saved_projects">Aún no hay proyectos guardados</string>
+    <string name="project_open_error">No se pudo abrir el proyecto</string>
 </resources>

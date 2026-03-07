@@ -12,13 +12,16 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.tharunbirla.librecuts.databinding.ActivityMainBinding
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var requestPermissionsLauncher: ActivityResultLauncher<Array<String>>
+    private lateinit var projectAdapter: ProjectAdapter
     private val selectVideoLauncher =
         registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
             if (uri != null) {
@@ -35,6 +38,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         setupPermissions()
+        setupProjectsList()
 
         binding.addVideoButton.setOnClickListener {
             if (arePermissionsGranted()) {
@@ -44,6 +48,45 @@ class MainActivity : AppCompatActivity() {
                 Log.w("PermissionCheck", "Permissions not granted, showing request dialog.")
                 showPermissionRequestDialog()
             }
+        }
+    }
+
+
+    override fun onResume() {
+        super.onResume()
+        loadSavedProjects()
+    }
+
+    private fun setupProjectsList() {
+        projectAdapter = ProjectAdapter(emptyList()) { projectFile ->
+            if (!projectFile.exists()) {
+                showToast(getString(R.string.project_open_error))
+                loadSavedProjects()
+                return@ProjectAdapter
+            }
+            navigateToEditingScreen(Uri.fromFile(projectFile))
+        }
+
+        binding.rvSavedProjects.layoutManager = LinearLayoutManager(this)
+        binding.rvSavedProjects.adapter = projectAdapter
+        loadSavedProjects()
+    }
+
+    private fun loadSavedProjects() {
+        val projectDir = File(filesDir, "projects")
+        val projectFiles = if (projectDir.exists()) {
+            projectDir.listFiles { file -> file.isFile && file.extension.equals("mp4", true) }
+                ?.sortedByDescending { it.lastModified() }
+                ?: emptyList()
+        } else {
+            emptyList()
+        }
+
+        projectAdapter.updateProjects(projectFiles)
+        binding.instructionText.text = if (projectFiles.isEmpty()) {
+            getString(R.string.no_saved_projects)
+        } else {
+            getString(R.string.create_engaging_videos)
         }
     }
 
