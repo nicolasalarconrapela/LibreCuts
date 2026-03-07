@@ -456,6 +456,7 @@ class VideoEditingActivity : AppCompatActivity() {
 
     private fun executeFFmpegCommand(command: String, outputPath: String) {
         coroutineScope.launch {
+            loadingScreen.visibility = View.VISIBLE
             try {
                 // Cancel any ongoing FFmpeg operations
                 FFmpegKit.cancel()
@@ -467,11 +468,13 @@ class VideoEditingActivity : AppCompatActivity() {
                 activeFFmpegSessions.add(session)
 
                 if (ReturnCode.isSuccess(session.returnCode)) {
+                    tempInputFile = File(outputPath)
                     videoUri = Uri.parse(outputPath)
                     refreshPlayer()
                     refreshUI()
                 } else {
                     showError("Error processing video: ${session.returnCode}")
+                    loadingScreen.visibility = View.GONE
                 }
 
                 // Remove completed session
@@ -479,6 +482,7 @@ class VideoEditingActivity : AppCompatActivity() {
 
             } catch (e: Exception) {
                 showError("Error executing command: ${e.message}")
+                loadingScreen.visibility = View.GONE
             }
         }
     }
