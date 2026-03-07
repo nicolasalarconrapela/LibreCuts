@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.11] - 2026-03-07
+### Fixed
+- Corregido guardado/exportación para evitar falso positivo: ahora se valida que el archivo exista y tenga tamaño mayor a 0 antes de mostrar éxito.
+- Tras exportar correctamente, se ejecuta `MediaScannerConnection.scanFile(...)` para que el video aparezca en Descargas/Galería.
+
 ## [1.0.10] - 2026-03-07
 ### Added
 - Se agregaron botones de **Deshacer** y **Rehacer** en el editor para navegar el historial de ediciones.

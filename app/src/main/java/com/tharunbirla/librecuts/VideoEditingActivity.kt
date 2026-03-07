@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -623,6 +624,20 @@ class VideoEditingActivity : AppCompatActivity() {
                 exportProgressJob?.cancel()
 
                 if (ReturnCode.isSuccess(session.returnCode)) {
+                    val outputFile = File(outputPath)
+                    if (!outputFile.exists() || outputFile.length() <= 0L) {
+                        dismissExportProgressDialog()
+                        showError("Error saving video: output file was not generated")
+                        return@launch
+                    }
+
+                    MediaScannerConnection.scanFile(
+                        this@VideoEditingActivity,
+                        arrayOf(outputFile.absolutePath),
+                        arrayOf("video/mp4"),
+                        null
+                    )
+
                     updateExportProgress(100)
                     delay(300)
                     dismissExportProgressDialog()
