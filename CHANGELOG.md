@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.0.17] - 2026-03-07
+### Fixed
+- Corregido error de compilación: se añadió la constante `KEY_CURRENT_PROJECT_NAME` faltante para el flujo de `Guardar Proyecto`.
+
 ## [1.0.16] - 2026-03-07
 ### Added
 - El botón superior ahora es un botón textual **"Guardar Proyecto"**.

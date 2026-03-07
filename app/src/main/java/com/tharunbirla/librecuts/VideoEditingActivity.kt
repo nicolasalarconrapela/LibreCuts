@@ -1381,5 +1381,6 @@ class VideoEditingActivity : AppCompatActivity() {
         private const val KEY_PROJECT_POSITION = "project_position"
         private const val KEY_PROJECT_ZOOM = "project_zoom"
         private const val KEY_PROJECT_SNAPSHOT_PATH = "project_snapshot_path"
+        private const val KEY_CURRENT_PROJECT_NAME = "current_project_name"
     }
 }
