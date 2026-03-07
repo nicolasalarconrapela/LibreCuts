@@ -24,6 +24,7 @@ import android.widget.ImageButton
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -92,6 +93,7 @@ class VideoEditingActivity : AppCompatActivity() {
     private val redoHistory = mutableListOf<Uri>()
     private var isVideoLoaded = false
     private var hasPendingRestoredPlaybackState = false
+    private var shouldPersistProjectState = true
     private val coroutineScope = CoroutineScope(Dispatchers.Main + Job())
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -120,6 +122,12 @@ class VideoEditingActivity : AppCompatActivity() {
         setupExoPlayer()
         setupCustomSeeker()
         setupFrameRecyclerView()
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                promptSaveProjectBeforeExit()
+            }
+        })
     }
 
     private fun initializeViews() {
@@ -143,7 +151,7 @@ class VideoEditingActivity : AppCompatActivity() {
         setupZoomControls()
 
         // Set up button click listeners
-        findViewById<ImageButton>(R.id.btnHome).setOnClickListener { onBackPressedDispatcher.onBackPressed()}
+        findViewById<ImageButton>(R.id.btnHome).setOnClickListener { promptSaveProjectBeforeExit() }
         findViewById<ImageButton>(R.id.btnSave).setOnClickListener { saveAction() }
         findViewById<ImageButton>(R.id.btnTrim).setOnClickListener { trimAction() }
         findViewById<ImageButton>(R.id.btnText).setOnClickListener { textAction() }
@@ -1028,6 +1036,29 @@ class VideoEditingActivity : AppCompatActivity() {
         return String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
     }
 
+    private fun promptSaveProjectBeforeExit() {
+        if (!shouldPersistProjectState) {
+            finish()
+            return
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.exit_editor_title))
+            .setMessage(getString(R.string.exit_editor_message))
+            .setPositiveButton(getString(R.string.save_project_exit)) { _, _ ->
+                shouldPersistProjectState = true
+                persistAutoSavedProjectState()
+                finish()
+            }
+            .setNegativeButton(getString(R.string.discard_project_exit)) { _, _ ->
+                shouldPersistProjectState = false
+                clearAutoSavedProjectState()
+                finish()
+            }
+            .setNeutralButton(getString(R.string.cancel), null)
+            .show()
+    }
+
     private fun persistAutoSavedProjectState(positionOverride: Long? = null) {
         val currentUri = videoUri?.toString() ?: return
         val playbackPosition = positionOverride ?: if (::player.isInitialized) player.currentPosition else 0L
@@ -1069,7 +1100,9 @@ class VideoEditingActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        persistAutoSavedProjectState()
+        if (shouldPersistProjectState) {
+            persistAutoSavedProjectState()
+        }
     }
 
     override fun onDestroy() {
@@ -1081,7 +1114,9 @@ class VideoEditingActivity : AppCompatActivity() {
         activeFFmpegSessions.clear()
 
         // Release resources
-        persistAutoSavedProjectState()
+        if (shouldPersistProjectState) {
+            persistAutoSavedProjectState()
+        }
         exportProgressJob?.cancel()
         dismissExportProgressDialog()
         if (::player.isInitialized) {

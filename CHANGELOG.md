@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.12] - 2026-03-07
+### Added
+- Al salir del editor ahora se muestra confirmación para **guardar o no guardar** el proyecto.
+- Si el usuario elige "No guardar", se limpia el estado cacheado del proyecto para evitar restauraciones no deseadas.
+
+### Changed
+- El auto-guardado en `onPause/onDestroy` ahora respeta la decisión del usuario al salir.
+
 ## [1.0.11] - 2026-03-07
 ### Fixed
 - Corregido guardado/exportación para evitar falso positivo: ahora se valida que el archivo exista y tenga tamaño mayor a 0 antes de mostrar éxito.

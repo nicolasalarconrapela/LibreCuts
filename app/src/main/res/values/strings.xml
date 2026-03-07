@@ -34,4 +34,8 @@
     <string name="frame_captured">Frame guardado en Imágenes</string>
     <string name="undo">Deshacer</string>
     <string name="redo">Rehacer</string>
+    <string name="exit_editor_title">Salir del proyecto</string>
+    <string name="exit_editor_message">¿Deseas guardar el proyecto antes de salir?</string>
+    <string name="save_project_exit">Guardar</string>
+    <string name="discard_project_exit">No guardar</string>
 </resources>
