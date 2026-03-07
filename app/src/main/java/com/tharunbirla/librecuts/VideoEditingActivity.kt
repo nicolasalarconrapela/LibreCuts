@@ -192,7 +192,7 @@ class VideoEditingActivity : AppCompatActivity() {
                             Toast.makeText(this@VideoEditingActivity, "Videos merged successfully!", Toast.LENGTH_SHORT).show()
 
                             // Update video URI to the merged video
-                            videoUri = Uri.parse(outputPath)
+                            videoUri = Uri.fromFile(File(outputPath))
                             refreshPlayer() // Refresh player with new video
                             refreshUI()     // Refresh UI
                         } else {
@@ -251,18 +251,19 @@ class VideoEditingActivity : AppCompatActivity() {
     }
 
     private fun cropVideo(aspectRatio: String) {
-        // Retrieve the video URI from the intent
-        val videoUri = intent.getParcelableExtra<Uri>("VIDEO_URI")
-        if (videoUri == null) {
+        val currentVideoUri = videoUri
+        if (currentVideoUri == null) {
             Toast.makeText(this, "Error retrieving video URI", Toast.LENGTH_SHORT).show()
             return
         }
 
-        // Fetch video metadata asynchronously to get the file path
         lifecycleScope.launch {
             try {
-                val media = getVideoMetadata(this@VideoEditingActivity, videoUri)
-                val inputPath = media.uri.toString() // Get the actual file path
+                val inputPath = getFilePathFromUri(currentVideoUri) ?: currentVideoUri.path
+                if (inputPath.isNullOrEmpty()) {
+                    showError("Error loading video path")
+                    return@launch
+                }
                 val outputDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
 
                 if (!outputDir.exists()) {
@@ -439,8 +440,17 @@ class VideoEditingActivity : AppCompatActivity() {
 
     private fun trimVideo(trimBeginingTime: Long, trimEndTime: Long) {
         lifecycleScope.launch {
-            val media = videoUri?.let { getVideoMetadata(this@VideoEditingActivity, it) }
-            val realFilePath = media?.uri.toString()
+            val currentVideoUri = videoUri
+            if (currentVideoUri == null) {
+                showError("Error loading video")
+                return@launch
+            }
+
+            val realFilePath = getFilePathFromUri(currentVideoUri) ?: currentVideoUri.path
+            if (realFilePath.isNullOrEmpty()) {
+                showError("Error loading video path")
+                return@launch
+            }
 
             val outputDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
             if (!outputDir.exists()) {
@@ -469,7 +479,7 @@ class VideoEditingActivity : AppCompatActivity() {
 
                 if (ReturnCode.isSuccess(session.returnCode)) {
                     tempInputFile = File(outputPath)
-                    videoUri = Uri.parse(outputPath)
+                    videoUri = Uri.fromFile(File(outputPath))
                     refreshPlayer()
                     refreshUI()
                 } else {
