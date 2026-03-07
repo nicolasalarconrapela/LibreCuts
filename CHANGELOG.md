@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.6] - 2026-03-07
+### Added
+- Zoom en preview de video mediante gesto de pinza (1x a 4x) y botón para restablecer zoom.
+- Captura de frame en calidad original (sin escalado) desde la posición actual del reproductor.
+- Nuevos controles en la tira de previsualización para capturar frame y resetear zoom.
+
 ## [1.0.5] - 2026-03-07
 ### Added
 - Se agregaron botones para avanzar frame a frame (anterior/siguiente) en la pantalla de edición.

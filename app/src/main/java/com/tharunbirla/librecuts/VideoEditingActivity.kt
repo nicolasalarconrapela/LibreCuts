@@ -12,6 +12,8 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import android.widget.ProgressBar
 import android.widget.ArrayAdapter
@@ -48,6 +50,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileOutputStream
 import java.util.Locale
 
 
@@ -65,6 +68,10 @@ class VideoEditingActivity : AppCompatActivity() {
     private lateinit var btnCancelTrimInline: Button
     private lateinit var btnPrevFrame: ImageButton
     private lateinit var btnNextFrame: ImageButton
+    private lateinit var btnCaptureFrame: ImageButton
+    private lateinit var btnResetZoom: ImageButton
+    private lateinit var scaleGestureDetector: ScaleGestureDetector
+    private var playerZoomLevel: Float = 1f
     private var frameStepMs: Long = 33L
     private var videoUri: Uri? = null
     private var videoFileName: String = ""
@@ -119,9 +126,12 @@ class VideoEditingActivity : AppCompatActivity() {
         btnCancelTrimInline = findViewById(R.id.btnCancelTrimInline)
         btnPrevFrame = findViewById(R.id.btnPrevFrame)
         btnNextFrame = findViewById(R.id.btnNextFrame)
+        btnCaptureFrame = findViewById(R.id.btnCaptureFrame)
+        btnResetZoom = findViewById(R.id.btnResetZoom)
 
         setupTrimPreviewControls()
         setupFrameStepControls()
+        setupZoomControls()
 
         // Set up button click listeners
         findViewById<ImageButton>(R.id.btnHome).setOnClickListener { onBackPressedDispatcher.onBackPressed()}
@@ -548,6 +558,7 @@ class VideoEditingActivity : AppCompatActivity() {
         }
 
         updateFrameStepFromVideo(videoUri)
+        resetPlayerZoom()
 
         // Update the custom seeker to reflect the new video's duration
         customVideoSeeker.setVideoDuration(player.duration)
@@ -646,6 +657,8 @@ class VideoEditingActivity : AppCompatActivity() {
     private fun setupFrameStepControls() {
         btnPrevFrame.setOnClickListener { stepFrame(-1) }
         btnNextFrame.setOnClickListener { stepFrame(1) }
+        btnCaptureFrame.setOnClickListener { captureCurrentFrameInOriginalQuality() }
+        btnResetZoom.setOnClickListener { resetPlayerZoom() }
     }
 
     private fun stepFrame(direction: Int) {
@@ -690,6 +703,86 @@ class VideoEditingActivity : AppCompatActivity() {
         }
     }
 
+    private fun setupZoomControls() {
+        scaleGestureDetector = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                val newScale = (playerZoomLevel * detector.scaleFactor).coerceIn(1f, 4f)
+                applyPlayerZoom(newScale)
+                return true
+            }
+        })
+
+        playerView.setOnTouchListener { _, event ->
+            if (event.actionMasked == MotionEvent.ACTION_UP && event.pointerCount <= 1) {
+                return@setOnTouchListener false
+            }
+            scaleGestureDetector.onTouchEvent(event)
+            true
+        }
+    }
+
+    private fun applyPlayerZoom(zoom: Float) {
+        playerZoomLevel = zoom
+        playerView.videoSurfaceView?.apply {
+            scaleX = zoom
+            scaleY = zoom
+            pivotX = width / 2f
+            pivotY = height / 2f
+        }
+    }
+
+    private fun resetPlayerZoom() {
+        applyPlayerZoom(1f)
+    }
+
+    private fun captureCurrentFrameInOriginalQuality() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val currentVideoUri = videoUri
+            if (currentVideoUri == null) {
+                withContext(Dispatchers.Main) { showError("Error loading video") }
+                return@launch
+            }
+
+            val inputPath = getFilePathFromUri(currentVideoUri) ?: currentVideoUri.path
+            if (inputPath.isNullOrEmpty()) {
+                withContext(Dispatchers.Main) { showError("Error loading video path") }
+                return@launch
+            }
+
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(inputPath)
+                val frameTimeUs = player.currentPosition * 1000
+                val originalFrame = retriever.getFrameAtTime(frameTimeUs, MediaMetadataRetriever.OPTION_CLOSEST)
+
+                if (originalFrame == null) {
+                    withContext(Dispatchers.Main) { showError("No fue posible capturar el frame") }
+                    return@launch
+                }
+
+                val outputDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                if (!outputDir.exists()) {
+                    outputDir.mkdirs()
+                }
+
+                val outputFile = File(outputDir, "frame_${System.currentTimeMillis()}.png")
+                FileOutputStream(outputFile).use { out ->
+                    originalFrame.compress(Bitmap.CompressFormat.PNG, 100, out)
+                }
+
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@VideoEditingActivity, getString(R.string.frame_captured), Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    showError("Error capturando frame: ${e.message}")
+                }
+            } finally {
+                retriever.release()
+            }
+        }
+    }
+
     private fun setupExoPlayer() {
         videoUri = intent.getParcelableExtra("VIDEO_URI")
         if (videoUri != null) {
@@ -699,6 +792,7 @@ class VideoEditingActivity : AppCompatActivity() {
             val mediaItem = MediaItem.fromUri(videoUri!!)
             player.setMediaItem(mediaItem)
             updateFrameStepFromVideo(videoUri)
+            resetPlayerZoom()
             loadingScreen.visibility = View.VISIBLE
 
             player.prepare()

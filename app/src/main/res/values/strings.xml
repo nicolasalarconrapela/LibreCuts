@@ -29,4 +29,7 @@
     <string name="export_success">Video guardado en Descargas</string>
     <string name="previous_frame">Frame anterior</string>
     <string name="next_frame">Frame siguiente</string>
+    <string name="capture_frame">Capturar frame</string>
+    <string name="reset_zoom">Restablecer zoom</string>
+    <string name="frame_captured">Frame guardado en Imágenes</string>
 </resources>
