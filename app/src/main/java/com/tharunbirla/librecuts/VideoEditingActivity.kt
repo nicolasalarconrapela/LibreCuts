@@ -13,6 +13,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
 import android.view.View
+import android.widget.ProgressBar
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.FrameLayout
@@ -20,6 +21,7 @@ import android.widget.ImageButton
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -41,6 +43,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -64,6 +68,10 @@ class VideoEditingActivity : AppCompatActivity() {
     private lateinit var tempInputFile: File
     private lateinit var loadingScreen: View
     private lateinit var lottieAnimationView: LottieAnimationView
+    private var exportProgressDialog: AlertDialog? = null
+    private var exportProgressJob: Job? = null
+    private var exportProgressBar: ProgressBar? = null
+    private var exportProgressText: TextView? = null
 
     private var activeFFmpegSessions = mutableListOf<FFmpegSession>()
     private var isVideoLoaded = false
@@ -540,7 +548,90 @@ class VideoEditingActivity : AppCompatActivity() {
 
 
     private fun saveAction() {
-        // Placeholder for future implementation of save functionality
+        lifecycleScope.launch {
+            val currentVideoUri = videoUri
+            if (currentVideoUri == null) {
+                showError("Error loading video")
+                return@launch
+            }
+
+            val inputPath = getFilePathFromUri(currentVideoUri) ?: currentVideoUri.path
+            if (inputPath.isNullOrEmpty()) {
+                showError("Error loading video path")
+                return@launch
+            }
+
+            val outputDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            if (!outputDir.exists()) {
+                outputDir.mkdirs()
+            }
+
+            val outputPath = File(outputDir, "saved_video_${System.currentTimeMillis()}.mp4").absolutePath
+            val command = "-i \"$inputPath\" -c copy \"$outputPath\""
+
+            showExportProgressDialog()
+            updateExportProgress(1)
+
+            exportProgressJob?.cancel()
+            exportProgressJob = launch {
+                var simulatedProgress = 1
+                while (isActive && simulatedProgress < 99) {
+                    delay(300)
+                    simulatedProgress += 1
+                    updateExportProgress(simulatedProgress)
+                }
+            }
+
+            try {
+                val session = withContext(Dispatchers.IO) {
+                    FFmpegKit.execute(command)
+                }
+
+                exportProgressJob?.cancel()
+
+                if (ReturnCode.isSuccess(session.returnCode)) {
+                    updateExportProgress(100)
+                    delay(300)
+                    dismissExportProgressDialog()
+                    Toast.makeText(this@VideoEditingActivity, getString(R.string.export_success), Toast.LENGTH_SHORT).show()
+                } else {
+                    dismissExportProgressDialog()
+                    showError("Error saving video: ${session.returnCode}")
+                }
+            } catch (e: Exception) {
+                exportProgressJob?.cancel()
+                dismissExportProgressDialog()
+                showError("Error saving video: ${e.message}")
+            }
+        }
+    }
+
+    private fun showExportProgressDialog() {
+        if (exportProgressDialog?.isShowing == true) return
+
+        val dialogView = layoutInflater.inflate(R.layout.export_progress_dialog, null)
+        exportProgressBar = dialogView.findViewById(R.id.progressExport)
+        exportProgressText = dialogView.findViewById(R.id.tvExportPercent)
+
+        exportProgressDialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(false)
+            .create()
+
+        exportProgressDialog?.show()
+    }
+
+    private fun updateExportProgress(progress: Int) {
+        val safeProgress = progress.coerceIn(1, 100)
+        exportProgressBar?.progress = safeProgress
+        exportProgressText?.text = "$safeProgress%"
+    }
+
+    private fun dismissExportProgressDialog() {
+        exportProgressDialog?.dismiss()
+        exportProgressDialog = null
+        exportProgressBar = null
+        exportProgressText = null
     }
 
     private fun setupExoPlayer() {
@@ -705,6 +796,8 @@ class VideoEditingActivity : AppCompatActivity() {
         activeFFmpegSessions.clear()
 
         // Release resources
+        exportProgressJob?.cancel()
+        dismissExportProgressDialog()
         player.release()
         coroutineScope.cancel()
     }

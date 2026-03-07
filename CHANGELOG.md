@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.4] - 2026-03-07
+### Added
+- Se implementó el botón de descarga/guardado para exportar el video actual a la carpeta Descargas.
+- Al guardar, se muestra un modal de progreso con porcentaje de 1% a 100% durante el procesamiento.
+
+### Fixed
+- El botón de descarga dejó de ser una acción vacía y ahora ejecuta una exportación real con FFmpeg.
+
 ## [1.0.3] - 2026-03-07
 ### Changed
 - La funcionalidad de `Trim` ahora usa controles inline sobre la tira de previsualización (RangeSlider + acciones aplicar/cancelar), eliminando el modal para recortar.

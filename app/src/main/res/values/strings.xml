@@ -25,4 +25,6 @@
     <string name="done">Done</string>
     <string name="please_wait">Please wait, your video is being processed.</string>
     <string name="select_aspect_ratio">Select Aspect Ratio</string>
+    <string name="export_processing_title">Procesando video…</string>
+    <string name="export_success">Video guardado en Descargas</string>
 </resources>
