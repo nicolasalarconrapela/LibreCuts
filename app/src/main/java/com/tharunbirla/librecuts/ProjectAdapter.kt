@@ -12,7 +12,8 @@ import java.util.Locale
 
 class ProjectAdapter(
     private var projects: List<File>,
-    private val onProjectClick: (File) -> Unit
+    private val onProjectClick: (File) -> Unit,
+    private val onProjectLongClick: (File) -> Unit
 ) : RecyclerView.Adapter<ProjectAdapter.ProjectViewHolder>() {
 
     class ProjectViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
@@ -34,6 +35,10 @@ class ProjectAdapter(
         holder.tvProjectMeta.text = "${sizeKb} KB · ${modified}"
 
         holder.itemView.setOnClickListener { onProjectClick(project) }
+        holder.itemView.setOnLongClickListener {
+            onProjectLongClick(project)
+            true
+        }
     }
 
     override fun getItemCount(): Int = projects.size

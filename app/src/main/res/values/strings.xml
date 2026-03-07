@@ -49,4 +49,17 @@
     <string name="save_project_name_hint">Ej: MiVideoEditado</string>
     <string name="save_project_name_empty">Ingresa un nombre de proyecto válido</string>
     <string name="project_saving_title">Guardando proyecto…</string>
+    <string name="project_action_open">Abrir</string>
+    <string name="project_action_rename">Renombrar</string>
+    <string name="project_action_delete">Eliminar</string>
+    <string name="project_rename_title">Renombrar proyecto</string>
+    <string name="project_rename_hint">Nuevo nombre</string>
+    <string name="project_rename_invalid">Nombre inválido</string>
+    <string name="project_rename_exists">Ya existe un proyecto con ese nombre</string>
+    <string name="project_rename_success">Proyecto renombrado</string>
+    <string name="project_rename_error">No se pudo renombrar el proyecto</string>
+    <string name="project_delete_title">Eliminar proyecto</string>
+    <string name="project_delete_message">¿Eliminar %1$s?</string>
+    <string name="project_delete_success">Proyecto eliminado</string>
+    <string name="project_delete_error">No se pudo eliminar el proyecto</string>
 </resources>

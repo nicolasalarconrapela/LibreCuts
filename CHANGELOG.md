@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.18] - 2026-03-07
+### Added
+- CRUD completo de proyectos en Home: abrir (leer), renombrar (actualizar) y eliminar.
+- Menú de gestión por pulsación larga sobre cada proyecto guardado.
+
+### Changed
+- Al renombrar/eliminar un proyecto también se sincroniza la copia pública en `Downloads/LibreCutsProjects` cuando existe.
+
 ## [1.0.17] - 2026-03-07
 ### Fixed
 - Corregido error de compilación: se añadió la constante `KEY_CURRENT_PROJECT_NAME` faltante para el flujo de `Guardar Proyecto`.

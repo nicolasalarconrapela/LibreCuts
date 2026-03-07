@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -58,14 +59,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupProjectsList() {
-        projectAdapter = ProjectAdapter(emptyList()) { projectFile ->
-            if (!projectFile.exists()) {
-                showToast(getString(R.string.project_open_error))
-                loadSavedProjects()
-                return@ProjectAdapter
+        projectAdapter = ProjectAdapter(
+            emptyList(),
+            onProjectClick = { projectFile ->
+                if (!projectFile.exists()) {
+                    showToast(getString(R.string.project_open_error))
+                    loadSavedProjects()
+                    return@ProjectAdapter
+                }
+                navigateToEditingScreen(Uri.fromFile(projectFile))
+            },
+            onProjectLongClick = { projectFile ->
+                showProjectCrudDialog(projectFile)
             }
-            navigateToEditingScreen(Uri.fromFile(projectFile))
-        }
+        )
 
         binding.rvSavedProjects.layoutManager = LinearLayoutManager(this)
         binding.rvSavedProjects.adapter = projectAdapter
@@ -88,6 +95,100 @@ class MainActivity : AppCompatActivity() {
         } else {
             getString(R.string.create_engaging_videos)
         }
+    }
+
+
+    private fun showProjectCrudDialog(projectFile: File) {
+        val options = arrayOf(
+            getString(R.string.project_action_open),
+            getString(R.string.project_action_rename),
+            getString(R.string.project_action_delete)
+        )
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle(projectFile.name)
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> navigateToEditingScreen(Uri.fromFile(projectFile))
+                    1 -> promptRenameProject(projectFile)
+                    2 -> confirmDeleteProject(projectFile)
+                }
+            }
+            .show()
+    }
+
+    private fun promptRenameProject(projectFile: File) {
+        val currentName = projectFile.nameWithoutExtension
+        val input = EditText(this).apply {
+            setText(currentName)
+            setSelection(currentName.length)
+            setSingleLine(true)
+            hint = getString(R.string.project_rename_hint)
+        }
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.project_rename_title))
+            .setView(input)
+            .setPositiveButton(getString(R.string.save_project_exit)) { _, _ ->
+                val newNameRaw = input.text?.toString()?.trim().orEmpty()
+                val newName = newNameRaw.replace(Regex("[^A-Za-z0-9_-]"), "_")
+                if (newName.isBlank()) {
+                    showToast(getString(R.string.project_rename_invalid))
+                    return@setPositiveButton
+                }
+
+                val renamedFile = File(projectFile.parentFile, "$newName.mp4")
+                if (renamedFile.exists()) {
+                    showToast(getString(R.string.project_rename_exists))
+                    return@setPositiveButton
+                }
+
+                val renamed = projectFile.renameTo(renamedFile)
+                if (renamed) {
+                    val publicDir = File(
+                        android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
+                        "LibreCutsProjects"
+                    )
+                    val publicOld = File(publicDir, projectFile.name)
+                    val publicNew = File(publicDir, renamedFile.name)
+                    if (publicOld.exists()) {
+                        publicOld.renameTo(publicNew)
+                    }
+                    showToast(getString(R.string.project_rename_success))
+                    loadSavedProjects()
+                } else {
+                    showToast(getString(R.string.project_rename_error))
+                }
+            }
+            .setNegativeButton(getString(R.string.cancel), null)
+            .show()
+    }
+
+    private fun confirmDeleteProject(projectFile: File) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(getString(R.string.project_delete_title))
+            .setMessage(getString(R.string.project_delete_message, projectFile.name))
+            .setPositiveButton(getString(R.string.project_action_delete)) { _, _ ->
+                val deleted = projectFile.delete()
+
+                val publicDir = File(
+                    android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
+                    "LibreCutsProjects"
+                )
+                val publicFile = File(publicDir, projectFile.name)
+                if (publicFile.exists()) {
+                    publicFile.delete()
+                }
+
+                if (deleted) {
+                    showToast(getString(R.string.project_delete_success))
+                } else {
+                    showToast(getString(R.string.project_delete_error))
+                }
+                loadSavedProjects()
+            }
+            .setNegativeButton(getString(R.string.cancel), null)
+            .show()
     }
 
     private fun setupPermissions() {
