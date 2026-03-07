@@ -697,6 +697,7 @@ class VideoEditingActivity : AppCompatActivity() {
                     delay(250)
                     dismissProjectSaveProgressDialog()
                     Toast.makeText(this@VideoEditingActivity, getString(R.string.project_saved_device), Toast.LENGTH_SHORT).show()
+                    finish()
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {

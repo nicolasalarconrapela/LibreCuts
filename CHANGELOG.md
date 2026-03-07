@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.19] - 2026-03-07
+### Changed
+- Al guardar proyecto desde el editor, se vuelve automáticamente a Home para ver la lista actualizada de proyectos.
+- En Home la lista de proyectos ahora muestra nombre, tamaño y duración del video.
+
+### Fixed
+- Se mantiene gestión CRUD de proyecto (renombrar/eliminar) desde Home y la actualización se refleja al regresar del guardado.
+
 ## [1.0.18] - 2026-03-07
 ### Added
 - CRUD completo de proyectos en Home: abrir (leer), renombrar (actualizar) y eliminar.

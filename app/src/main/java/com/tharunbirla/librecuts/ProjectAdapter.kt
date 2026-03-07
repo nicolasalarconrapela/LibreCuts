@@ -1,14 +1,12 @@
 package com.tharunbirla.librecuts
 
+import android.media.MediaMetadataRetriever
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class ProjectAdapter(
     private var projects: List<File>,
@@ -30,9 +28,9 @@ class ProjectAdapter(
         val project = projects[position]
         holder.tvProjectName.text = project.name
 
-        val modified = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(project.lastModified()))
         val sizeKb = (project.length() / 1024).coerceAtLeast(1)
-        holder.tvProjectMeta.text = "${sizeKb} KB · ${modified}"
+        val duration = getVideoDuration(project)
+        holder.tvProjectMeta.text = "${sizeKb} KB · ${duration}"
 
         holder.itemView.setOnClickListener { onProjectClick(project) }
         holder.itemView.setOnLongClickListener {
@@ -46,5 +44,21 @@ class ProjectAdapter(
     fun updateProjects(newProjects: List<File>) {
         projects = newProjects
         notifyDataSetChanged()
+    }
+
+    private fun getVideoDuration(file: File): String {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(file.absolutePath)
+            val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+            val totalSeconds = (durationMs / 1000).toInt()
+            val minutes = totalSeconds / 60
+            val seconds = totalSeconds % 60
+            String.format("%02d:%02d", minutes, seconds)
+        } catch (e: Exception) {
+            "--:--"
+        } finally {
+            retriever.release()
+        }
     }
 }
