@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.3] - 2026-03-07
+### Changed
+- La funcionalidad de `Trim` ahora usa controles inline sobre la tira de previsualización (RangeSlider + acciones aplicar/cancelar), eliminando el modal para recortar.
+- El botón de Trim ahora alterna mostrar/ocultar los controles de recorte en la misma pantalla de edición.
+
+### Fixed
+- Se mantiene el recorte sobre el video actual cargado, permitiendo recortes consecutivos sin volver al flujo inicial.
+
 ## [1.0.2] - 2026-03-07
 ### Fixed
 - Corregido bug al recortar por segunda vez: ahora el recorte usa siempre el `videoUri` actual en memoria y no el URI inicial del `Intent`.

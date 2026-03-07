@@ -55,6 +55,10 @@ class VideoEditingActivity : AppCompatActivity() {
     private lateinit var tvDuration: TextView
     private lateinit var frameRecyclerView: RecyclerView
     private lateinit var customVideoSeeker: CustomVideoSeeker
+    private lateinit var trimPreviewControls: View
+    private lateinit var trimRangeSlider: RangeSlider
+    private lateinit var btnApplyTrimInline: Button
+    private lateinit var btnCancelTrimInline: Button
     private var videoUri: Uri? = null
     private var videoFileName: String = ""
     private lateinit var tempInputFile: File
@@ -98,6 +102,12 @@ class VideoEditingActivity : AppCompatActivity() {
         tvDuration = findViewById(R.id.tvDuration)
         frameRecyclerView = findViewById(R.id.frameRecyclerView)
         customVideoSeeker = findViewById(R.id.customVideoSeeker)
+        trimPreviewControls = findViewById(R.id.trimPreviewControls)
+        trimRangeSlider = findViewById(R.id.trimRangeSlider)
+        btnApplyTrimInline = findViewById(R.id.btnApplyTrimInline)
+        btnCancelTrimInline = findViewById(R.id.btnCancelTrimInline)
+
+        setupTrimPreviewControls()
 
         // Set up button click listeners
         findViewById<ImageButton>(R.id.btnHome).setOnClickListener { onBackPressedDispatcher.onBackPressed()}
@@ -386,56 +396,50 @@ class VideoEditingActivity : AppCompatActivity() {
     @SuppressLint("InflateParams")
     private fun trimAction() {
         val videoDuration = player.duration
-
-        // Validate the video duration
         if (videoDuration <= 0) {
             Toast.makeText(this, "Video duration is invalid.", Toast.LENGTH_SHORT).show()
             return
         }
 
-        // Create BottomSheetDialog
-        val bottomSheetDialog = BottomSheetDialog(this@VideoEditingActivity)
-        val sheetView = layoutInflater.inflate(R.layout.trim_bottom_sheet_dialog, null)
+        val isOpening = trimPreviewControls.visibility != View.VISIBLE
+        trimPreviewControls.visibility = if (isOpening) View.VISIBLE else View.GONE
 
-        val rangeSlider: RangeSlider = sheetView.findViewById(R.id.rangeSlider)
+        if (isOpening) {
+            configureTrimRangeSlider(videoDuration)
+        }
+    }
 
-        // Convert duration to minutes and seconds
-        val durationInMillis: Long = videoDuration
-        val totalMinutes = (durationInMillis / 60000).toInt()
-        val totalSeconds = ((durationInMillis % 60000) / 1000).toInt()
+    private fun setupTrimPreviewControls() {
+        trimRangeSlider.addOnChangeListener { slider, value, fromUser ->
+            if (!fromUser) return@addOnChangeListener
 
-        // Format as float for the RangeSlider (00.00)
-        val formattedValueTo = (totalMinutes * 60 + totalSeconds).toFloat() // Total seconds as float
-
-        rangeSlider.valueFrom = 0f
-        rangeSlider.valueTo = formattedValueTo
-        rangeSlider.values = listOf(0f, formattedValueTo) // Set initial range
-
-        // Log the values for debugging
-        Log.d("RangeSlider", "Value from: ${rangeSlider.valueFrom}, Value to: ${rangeSlider.valueTo}")
-
-        rangeSlider.addOnChangeListener { slider, value, fromUser ->
-            val start = slider.values[0].toLong() * 1000 // Convert to milliseconds
-            val end = slider.values[1].toLong() * 1000 // Convert to milliseconds
-
-            // Update the player’s playback position based on the start value
-            if (fromUser) {
-                if (value == slider.values[0]) {
-                    player.seekTo(start)
-                }
-                else if (value == slider.values[1]) {
-                    player.seekTo(end)
-                }
+            val start = slider.values[0].toLong() * 1000
+            val end = slider.values[1].toLong() * 1000
+            if (value == slider.values[0]) {
+                player.seekTo(start)
+            } else if (value == slider.values[1]) {
+                player.seekTo(end)
             }
         }
 
-        // Set up button listeners
-        sheetView.findViewById<Button>(R.id.btnDoneTrim).setOnClickListener {
-            trimVideo(rangeSlider.values[0].toLong(), rangeSlider.values[1].toLong())
+        btnApplyTrimInline.setOnClickListener {
+            val start = trimRangeSlider.values[0].toLong()
+            val end = trimRangeSlider.values[1].toLong()
+            trimPreviewControls.visibility = View.GONE
+            trimVideo(start, end)
         }
 
-        bottomSheetDialog.setContentView(sheetView)
-        bottomSheetDialog.show()
+        btnCancelTrimInline.setOnClickListener {
+            trimPreviewControls.visibility = View.GONE
+        }
+    }
+
+    private fun configureTrimRangeSlider(videoDuration: Long) {
+        val totalSeconds = (videoDuration / 1000f).coerceAtLeast(1f)
+        trimRangeSlider.valueFrom = 0f
+        trimRangeSlider.valueTo = totalSeconds
+        trimRangeSlider.values = listOf(0f, totalSeconds)
+        Log.d("RangeSlider", "Value from: ${trimRangeSlider.valueFrom}, Value to: ${trimRangeSlider.valueTo}")
     }
 
     private fun trimVideo(trimBeginingTime: Long, trimEndTime: Long) {
