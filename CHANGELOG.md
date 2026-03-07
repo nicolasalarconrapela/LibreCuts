@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.16] - 2026-03-07
+### Added
+- El botón superior ahora es un botón textual **"Guardar Proyecto"**.
+- En el primer guardado se muestra un modal para ingresar el nombre del proyecto.
+- En cada guardado de proyecto se muestra modal de carga con porcentaje (1-100%).
+
+### Changed
+- El guardado manual de proyecto reutiliza el nombre ingresado y sobrescribe el archivo del proyecto con ese nombre.
+
 ## [1.0.15] - 2026-03-07
 ### Added
 - Nuevo botón en la parte superior derecha para guardar explícitamente el proyecto en el dispositivo.

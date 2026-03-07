@@ -44,4 +44,9 @@
     <string name="save_project_device">Guardar proyecto en dispositivo</string>
     <string name="project_saved_device">Proyecto guardado en el dispositivo</string>
     <string name="project_save_error">No se pudo guardar el proyecto</string>
+    <string name="save_project_button">Guardar Proyecto</string>
+    <string name="save_project_name_title">Nombre del proyecto</string>
+    <string name="save_project_name_hint">Ej: MiVideoEditado</string>
+    <string name="save_project_name_empty">Ingresa un nombre de proyecto válido</string>
+    <string name="project_saving_title">Guardando proyecto…</string>
 </resources>

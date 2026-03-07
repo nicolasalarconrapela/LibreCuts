@@ -19,6 +19,7 @@ import android.view.View
 import android.widget.ProgressBar
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.Spinner
@@ -74,6 +75,7 @@ class VideoEditingActivity : AppCompatActivity() {
     private lateinit var btnResetZoom: ImageButton
     private lateinit var btnUndo: Button
     private lateinit var btnRedo: Button
+    private lateinit var btnSaveProject: Button
     private lateinit var scaleGestureDetector: ScaleGestureDetector
     private var playerZoomLevel: Float = 1f
     private var frameStepMs: Long = 33L
@@ -86,6 +88,10 @@ class VideoEditingActivity : AppCompatActivity() {
     private var exportProgressJob: Job? = null
     private var exportProgressBar: ProgressBar? = null
     private var exportProgressText: TextView? = null
+    private var projectSaveProgressDialog: AlertDialog? = null
+    private var projectSaveProgressJob: Job? = null
+    private var projectSaveProgressBar: ProgressBar? = null
+    private var projectSaveProgressText: TextView? = null
     private val projectPrefs by lazy { getSharedPreferences(PROJECT_PREFS, Context.MODE_PRIVATE) }
 
     private var activeFFmpegSessions = mutableListOf<FFmpegSession>()
@@ -145,6 +151,7 @@ class VideoEditingActivity : AppCompatActivity() {
         btnResetZoom = findViewById(R.id.btnResetZoom)
         btnUndo = findViewById(R.id.btnUndo)
         btnRedo = findViewById(R.id.btnRedo)
+        btnSaveProject = findViewById(R.id.btnSaveProject)
 
         setupTrimPreviewControls()
         setupFrameStepControls()
@@ -152,7 +159,7 @@ class VideoEditingActivity : AppCompatActivity() {
 
         // Set up button click listeners
         findViewById<ImageButton>(R.id.btnHome).setOnClickListener { promptSaveProjectBeforeExit() }
-        findViewById<ImageButton>(R.id.btnSaveProject).setOnClickListener { saveProjectToDeviceAction() }
+        btnSaveProject.setOnClickListener { onSaveProjectClicked() }
         findViewById<ImageButton>(R.id.btnSave).setOnClickListener { saveAction() }
         findViewById<ImageButton>(R.id.btnTrim).setOnClickListener { trimAction() }
         findViewById<ImageButton>(R.id.btnText).setOnClickListener { textAction() }
@@ -590,7 +597,39 @@ class VideoEditingActivity : AppCompatActivity() {
     }
 
 
-    private fun saveProjectToDeviceAction() {
+    private fun onSaveProjectClicked() {
+        val existingProjectName = projectPrefs.getString(KEY_CURRENT_PROJECT_NAME, null)
+        if (existingProjectName.isNullOrBlank()) {
+            promptProjectNameAndSave()
+        } else {
+            saveProjectToDeviceAction(existingProjectName)
+        }
+    }
+
+    private fun promptProjectNameAndSave() {
+        val input = EditText(this).apply {
+            hint = getString(R.string.save_project_name_hint)
+            setSingleLine(true)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.save_project_name_title))
+            .setView(input)
+            .setPositiveButton(getString(R.string.save_project_exit)) { _, _ ->
+                val rawName = input.text?.toString()?.trim().orEmpty()
+                val sanitizedName = rawName.replace(Regex("[^A-Za-z0-9_-]"), "_")
+                if (sanitizedName.isBlank()) {
+                    showError(getString(R.string.save_project_name_empty))
+                    return@setPositiveButton
+                }
+                projectPrefs.edit().putString(KEY_CURRENT_PROJECT_NAME, sanitizedName).apply()
+                saveProjectToDeviceAction(sanitizedName)
+            }
+            .setNegativeButton(getString(R.string.cancel), null)
+            .show()
+    }
+
+    private fun saveProjectToDeviceAction(projectName: String) {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val currentVideoUri = videoUri
@@ -611,13 +650,28 @@ class VideoEditingActivity : AppCompatActivity() {
                     return@launch
                 }
 
-                val projectName = "project_${System.currentTimeMillis()}.mp4"
+                withContext(Dispatchers.Main) {
+                    showProjectSaveProgressDialog()
+                    updateProjectSaveProgress(1)
+                }
+
+                projectSaveProgressJob?.cancel()
+                projectSaveProgressJob = lifecycleScope.launch {
+                    var progress = 1
+                    while (isActive && progress < 95) {
+                        delay(150)
+                        progress += 1
+                        updateProjectSaveProgress(progress)
+                    }
+                }
+
+                val fileName = if (projectName.endsWith(".mp4", true)) projectName else "$projectName.mp4"
 
                 val internalProjectDir = File(filesDir, "projects")
                 if (!internalProjectDir.exists()) {
                     internalProjectDir.mkdirs()
                 }
-                val internalProjectFile = File(internalProjectDir, projectName)
+                val internalProjectFile = File(internalProjectDir, fileName)
                 sourceFile.copyTo(internalProjectFile, overwrite = true)
 
                 val publicProjectDir = File(
@@ -627,7 +681,7 @@ class VideoEditingActivity : AppCompatActivity() {
                 if (!publicProjectDir.exists()) {
                     publicProjectDir.mkdirs()
                 }
-                val publicProjectFile = File(publicProjectDir, projectName)
+                val publicProjectFile = File(publicProjectDir, fileName)
                 sourceFile.copyTo(publicProjectFile, overwrite = true)
 
                 MediaScannerConnection.scanFile(
@@ -638,14 +692,49 @@ class VideoEditingActivity : AppCompatActivity() {
                 )
 
                 withContext(Dispatchers.Main) {
+                    projectSaveProgressJob?.cancel()
+                    updateProjectSaveProgress(100)
+                    delay(250)
+                    dismissProjectSaveProgressDialog()
                     Toast.makeText(this@VideoEditingActivity, getString(R.string.project_saved_device), Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
+                    projectSaveProgressJob?.cancel()
+                    dismissProjectSaveProgressDialog()
                     showError("${getString(R.string.project_save_error)}: ${e.message}")
                 }
             }
         }
+    }
+
+    private fun showProjectSaveProgressDialog() {
+        if (projectSaveProgressDialog?.isShowing == true) return
+
+        val dialogView = layoutInflater.inflate(R.layout.export_progress_dialog, null)
+        projectSaveProgressBar = dialogView.findViewById(R.id.progressExport)
+        projectSaveProgressText = dialogView.findViewById(R.id.tvExportPercent)
+        dialogView.findViewById<TextView>(R.id.tvExportTitle).text = getString(R.string.project_saving_title)
+
+        projectSaveProgressDialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(false)
+            .create()
+
+        projectSaveProgressDialog?.show()
+    }
+
+    private fun updateProjectSaveProgress(progress: Int) {
+        val safeProgress = progress.coerceIn(1, 100)
+        projectSaveProgressBar?.progress = safeProgress
+        projectSaveProgressText?.text = "$safeProgress%"
+    }
+
+    private fun dismissProjectSaveProgressDialog() {
+        projectSaveProgressDialog?.dismiss()
+        projectSaveProgressDialog = null
+        projectSaveProgressBar = null
+        projectSaveProgressText = null
     }
 
     private fun saveAction() {
@@ -1210,6 +1299,8 @@ class VideoEditingActivity : AppCompatActivity() {
         }
         exportProgressJob?.cancel()
         dismissExportProgressDialog()
+        projectSaveProgressJob?.cancel()
+        dismissProjectSaveProgressDialog()
         if (::player.isInitialized) {
             player.release()
         }
