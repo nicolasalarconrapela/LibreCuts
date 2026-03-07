@@ -63,6 +63,9 @@ class VideoEditingActivity : AppCompatActivity() {
     private lateinit var trimRangeSlider: RangeSlider
     private lateinit var btnApplyTrimInline: Button
     private lateinit var btnCancelTrimInline: Button
+    private lateinit var btnPrevFrame: ImageButton
+    private lateinit var btnNextFrame: ImageButton
+    private var frameStepMs: Long = 33L
     private var videoUri: Uri? = null
     private var videoFileName: String = ""
     private lateinit var tempInputFile: File
@@ -114,8 +117,11 @@ class VideoEditingActivity : AppCompatActivity() {
         trimRangeSlider = findViewById(R.id.trimRangeSlider)
         btnApplyTrimInline = findViewById(R.id.btnApplyTrimInline)
         btnCancelTrimInline = findViewById(R.id.btnCancelTrimInline)
+        btnPrevFrame = findViewById(R.id.btnPrevFrame)
+        btnNextFrame = findViewById(R.id.btnNextFrame)
 
         setupTrimPreviewControls()
+        setupFrameStepControls()
 
         // Set up button click listeners
         findViewById<ImageButton>(R.id.btnHome).setOnClickListener { onBackPressedDispatcher.onBackPressed()}
@@ -541,6 +547,8 @@ class VideoEditingActivity : AppCompatActivity() {
             seekTo(0) // Seek to the start of the video
         }
 
+        updateFrameStepFromVideo(videoUri)
+
         // Update the custom seeker to reflect the new video's duration
         customVideoSeeker.setVideoDuration(player.duration)
         updateDurationDisplay(0, player.duration.toInt()) // Reset duration display
@@ -634,6 +642,54 @@ class VideoEditingActivity : AppCompatActivity() {
         exportProgressText = null
     }
 
+
+    private fun setupFrameStepControls() {
+        btnPrevFrame.setOnClickListener { stepFrame(-1) }
+        btnNextFrame.setOnClickListener { stepFrame(1) }
+    }
+
+    private fun stepFrame(direction: Int) {
+        val duration = player.duration
+        if (duration <= 0) return
+
+        val targetPosition = (player.currentPosition + (frameStepMs * direction)).coerceIn(0L, duration)
+        player.seekTo(targetPosition)
+        updateDurationDisplay(targetPosition.toInt(), duration.toInt())
+    }
+
+    private fun updateFrameStepFromVideo(uri: Uri?) {
+        if (uri == null) {
+            frameStepMs = 33L
+            return
+        }
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            val retriever = MediaMetadataRetriever()
+            val step = try {
+                val path = getFilePathFromUri(uri) ?: uri.path
+                if (!path.isNullOrEmpty()) {
+                    retriever.setDataSource(path)
+                    val frameRate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)?.toFloatOrNull()
+                    if (frameRate != null && frameRate > 0f) {
+                        (1000f / frameRate).toLong().coerceAtLeast(1L)
+                    } else {
+                        33L
+                    }
+                } else {
+                    33L
+                }
+            } catch (e: Exception) {
+                33L
+            } finally {
+                retriever.release()
+            }
+
+            withContext(Dispatchers.Main) {
+                frameStepMs = step
+            }
+        }
+    }
+
     private fun setupExoPlayer() {
         videoUri = intent.getParcelableExtra("VIDEO_URI")
         if (videoUri != null) {
@@ -642,6 +698,7 @@ class VideoEditingActivity : AppCompatActivity() {
 
             val mediaItem = MediaItem.fromUri(videoUri!!)
             player.setMediaItem(mediaItem)
+            updateFrameStepFromVideo(videoUri)
             loadingScreen.visibility = View.VISIBLE
 
             player.prepare()

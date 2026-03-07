@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.5] - 2026-03-07
+### Added
+- Se agregaron botones para avanzar frame a frame (anterior/siguiente) en la pantalla de edición.
+- Los botones mueven el playhead por frame usando el frame rate del video cuando está disponible (fallback a ~33ms).
+
 ## [1.0.4] - 2026-03-07
 ### Added
 - Se implementó el botón de descarga/guardado para exportar el video actual a la carpeta Descargas.

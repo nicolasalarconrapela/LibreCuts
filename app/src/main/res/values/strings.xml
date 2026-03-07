@@ -27,4 +27,6 @@
     <string name="select_aspect_ratio">Select Aspect Ratio</string>
     <string name="export_processing_title">Procesando video…</string>
     <string name="export_success">Video guardado en Descargas</string>
+    <string name="previous_frame">Frame anterior</string>
+    <string name="next_frame">Frame siguiente</string>
 </resources>

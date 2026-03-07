@@ -102,6 +102,37 @@
         </FrameLayout>
 
         <LinearLayout
+            android:id="@+id/frameStepControls"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal"
+            android:layout_gravity="center_horizontal">
+
+            <ImageButton
+                android:id="@+id/btnPrevFrame"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="48dp"
+                android:minHeight="48dp"
+                android:padding="8dp"
+                android:src="@drawable/ic_trim_left_24"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/previous_frame" />
+
+            <ImageButton
+                android:id="@+id/btnNextFrame"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="48dp"
+                android:minHeight="48dp"
+                android:padding="8dp"
+                android:src="@drawable/ic_trim_right_24"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/next_frame" />
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/trimPreviewControls"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
