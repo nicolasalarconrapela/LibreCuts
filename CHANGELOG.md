@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.0.7] - 2026-03-07
+### Fixed
+- La exportación/guardado ahora conserva explícitamente la calidad original usando stream copy de video/audio/subtítulos (`-map 0 -c:v copy -c:a copy -c:s copy`), evitando recodificación al guardar.
+
 ## [1.0.6] - 2026-03-07
 ### Added
 - Zoom en preview de video mediante gesto de pinza (1x a 4x) y botón para restablecer zoom.

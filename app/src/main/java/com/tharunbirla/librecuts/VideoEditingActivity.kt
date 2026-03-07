@@ -586,7 +586,7 @@ class VideoEditingActivity : AppCompatActivity() {
             }
 
             val outputPath = File(outputDir, "saved_video_${System.currentTimeMillis()}.mp4").absolutePath
-            val command = "-i \"$inputPath\" -c copy \"$outputPath\""
+            val command = "-i \"$inputPath\" -map 0 -c:v copy -c:a copy -c:s copy -dn \"$outputPath\""
 
             showExportProgressDialog()
             updateExportProgress(1)
