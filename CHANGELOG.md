@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.8] - 2026-03-07
+### Added
+- Guardado automático del proyecto (video actual editado, posición de reproducción y nivel de zoom) usando `SharedPreferences`.
+- Restauración automática del último proyecto guardado al abrir nuevamente el editor, si el archivo sigue disponible.
+
+### Changed
+- Tras operaciones FFmpeg exitosas, el estado del proyecto se persiste automáticamente para continuar edición sin perder contexto.
+
 ## [1.0.7] - 2026-03-07
 ### Fixed
 - La exportación/guardado ahora conserva explícitamente la calidad original usando stream copy de video/audio/subtítulos (`-map 0 -c:v copy -c:a copy -c:s copy`), evitando recodificación al guardar.

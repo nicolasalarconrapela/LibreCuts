@@ -82,6 +82,7 @@ class VideoEditingActivity : AppCompatActivity() {
     private var exportProgressJob: Job? = null
     private var exportProgressBar: ProgressBar? = null
     private var exportProgressText: TextView? = null
+    private val projectPrefs by lazy { getSharedPreferences(PROJECT_PREFS, Context.MODE_PRIVATE) }
 
     private var activeFFmpegSessions = mutableListOf<FFmpegSession>()
     private var isVideoLoaded = false
@@ -227,6 +228,7 @@ class VideoEditingActivity : AppCompatActivity() {
 
                             // Update video URI to the merged video
                             videoUri = Uri.fromFile(File(outputPath))
+                            persistAutoSavedProjectState(0L)
                             refreshPlayer() // Refresh player with new video
                             refreshUI()     // Refresh UI
                         } else {
@@ -508,6 +510,7 @@ class VideoEditingActivity : AppCompatActivity() {
                 if (ReturnCode.isSuccess(session.returnCode)) {
                     tempInputFile = File(outputPath)
                     videoUri = Uri.fromFile(File(outputPath))
+                    persistAutoSavedProjectState(0L)
                     refreshPlayer()
                     refreshUI()
                 } else {
@@ -784,7 +787,10 @@ class VideoEditingActivity : AppCompatActivity() {
     }
 
     private fun setupExoPlayer() {
-        videoUri = intent.getParcelableExtra("VIDEO_URI")
+        restoreAutoSavedProjectState()
+        if (videoUri == null) {
+            videoUri = intent.getParcelableExtra("VIDEO_URI")
+        }
         if (videoUri != null) {
             player = ExoPlayer.Builder(this).build()
             playerView.player = player
@@ -803,6 +809,7 @@ class VideoEditingActivity : AppCompatActivity() {
                     if (state == Player.STATE_READY) {
                         isVideoLoaded = true
                         customVideoSeeker.setVideoDuration(player.duration)
+                        applyRestoredPlaybackState()
                         updateDurationDisplay(player.currentPosition.toInt(), player.duration.toInt())
                     }
                 }
@@ -938,6 +945,48 @@ class VideoEditingActivity : AppCompatActivity() {
         return String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
     }
 
+    private fun persistAutoSavedProjectState(positionOverride: Long? = null) {
+        val currentUri = videoUri?.toString() ?: return
+        val playbackPosition = positionOverride ?: if (::player.isInitialized) player.currentPosition else 0L
+        projectPrefs.edit()
+            .putString(KEY_PROJECT_VIDEO_URI, currentUri)
+            .putLong(KEY_PROJECT_POSITION, playbackPosition)
+            .putFloat(KEY_PROJECT_ZOOM, playerZoomLevel)
+            .apply()
+    }
+
+    private fun restoreAutoSavedProjectState() {
+        val savedUri = projectPrefs.getString(KEY_PROJECT_VIDEO_URI, null)
+        if (savedUri.isNullOrEmpty()) return
+
+        val savedFile = Uri.parse(savedUri)
+        val path = if (savedFile.scheme == "file") savedFile.path else getFilePathFromUri(savedFile)
+        if (path.isNullOrEmpty() || !File(path).exists()) {
+            clearAutoSavedProjectState()
+            return
+        }
+
+        videoUri = savedFile
+    }
+
+    private fun applyRestoredPlaybackState() {
+        val savedPosition = projectPrefs.getLong(KEY_PROJECT_POSITION, 0L)
+        val savedZoom = projectPrefs.getFloat(KEY_PROJECT_ZOOM, 1f)
+        if (savedPosition > 0L) {
+            player.seekTo(savedPosition)
+        }
+        applyPlayerZoom(savedZoom.coerceIn(1f, 4f))
+    }
+
+    private fun clearAutoSavedProjectState() {
+        projectPrefs.edit().clear().apply()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        persistAutoSavedProjectState()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         // Cancel all active FFmpeg sessions
@@ -947,6 +996,7 @@ class VideoEditingActivity : AppCompatActivity() {
         activeFFmpegSessions.clear()
 
         // Release resources
+        persistAutoSavedProjectState()
         exportProgressJob?.cancel()
         dismissExportProgressDialog()
         player.release()
@@ -1022,5 +1072,9 @@ class VideoEditingActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "VideoMetadata"
         private const val PICK_VIDEO_REQUEST = 1
+        private const val PROJECT_PREFS = "librecuts_project_prefs"
+        private const val KEY_PROJECT_VIDEO_URI = "project_video_uri"
+        private const val KEY_PROJECT_POSITION = "project_position"
+        private const val KEY_PROJECT_ZOOM = "project_zoom"
     }
 }
