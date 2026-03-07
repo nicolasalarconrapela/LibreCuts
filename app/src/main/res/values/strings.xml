@@ -32,4 +32,6 @@
     <string name="capture_frame">Capturar frame</string>
     <string name="reset_zoom">Restablecer zoom</string>
     <string name="frame_captured">Frame guardado en Imágenes</string>
+    <string name="undo">Deshacer</string>
+    <string name="redo">Rehacer</string>
 </resources>

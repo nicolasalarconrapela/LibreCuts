@@ -154,6 +154,32 @@
                 android:contentDescription="@string/reset_zoom" />
         </LinearLayout>
 
+
+
+        <LinearLayout
+            android:id="@+id/historyControls"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal"
+            android:layout_gravity="center_horizontal">
+
+            <Button
+                android:id="@+id/btnUndo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/rounded_button_dark"
+                android:text="@string/undo" />
+
+            <Button
+                android:id="@+id/btnRedo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/rounded_button_dark"
+                android:text="@string/redo" />
+        </LinearLayout>
+
         <LinearLayout
             android:id="@+id/trimPreviewControls"
             android:layout_width="match_parent"

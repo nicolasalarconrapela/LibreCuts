@@ -70,6 +70,8 @@ class VideoEditingActivity : AppCompatActivity() {
     private lateinit var btnNextFrame: ImageButton
     private lateinit var btnCaptureFrame: ImageButton
     private lateinit var btnResetZoom: ImageButton
+    private lateinit var btnUndo: Button
+    private lateinit var btnRedo: Button
     private lateinit var scaleGestureDetector: ScaleGestureDetector
     private var playerZoomLevel: Float = 1f
     private var frameStepMs: Long = 33L
@@ -85,6 +87,8 @@ class VideoEditingActivity : AppCompatActivity() {
     private val projectPrefs by lazy { getSharedPreferences(PROJECT_PREFS, Context.MODE_PRIVATE) }
 
     private var activeFFmpegSessions = mutableListOf<FFmpegSession>()
+    private val undoHistory = mutableListOf<Uri>()
+    private val redoHistory = mutableListOf<Uri>()
     private var isVideoLoaded = false
     private var hasPendingRestoredPlaybackState = false
     private val coroutineScope = CoroutineScope(Dispatchers.Main + Job())
@@ -130,6 +134,8 @@ class VideoEditingActivity : AppCompatActivity() {
         btnNextFrame = findViewById(R.id.btnNextFrame)
         btnCaptureFrame = findViewById(R.id.btnCaptureFrame)
         btnResetZoom = findViewById(R.id.btnResetZoom)
+        btnUndo = findViewById(R.id.btnUndo)
+        btnRedo = findViewById(R.id.btnRedo)
 
         setupTrimPreviewControls()
         setupFrameStepControls()
@@ -228,7 +234,9 @@ class VideoEditingActivity : AppCompatActivity() {
                             Toast.makeText(this@VideoEditingActivity, "Videos merged successfully!", Toast.LENGTH_SHORT).show()
 
                             // Update video URI to the merged video
+                            val previousUri = videoUri
                             videoUri = Uri.fromFile(File(outputPath))
+                            recordEditHistory(previousUri, videoUri)
                             persistAutoSavedProjectState(0L)
                             refreshPlayer() // Refresh player with new video
                             refreshUI()     // Refresh UI
@@ -509,8 +517,10 @@ class VideoEditingActivity : AppCompatActivity() {
                 activeFFmpegSessions.add(session)
 
                 if (ReturnCode.isSuccess(session.returnCode)) {
+                    val previousUri = videoUri
                     tempInputFile = File(outputPath)
                     videoUri = Uri.fromFile(File(outputPath))
+                    recordEditHistory(previousUri, videoUri)
                     persistAutoSavedProjectState(0L)
                     refreshPlayer()
                     refreshUI()
@@ -663,6 +673,8 @@ class VideoEditingActivity : AppCompatActivity() {
         btnNextFrame.setOnClickListener { stepFrame(1) }
         btnCaptureFrame.setOnClickListener { captureCurrentFrameInOriginalQuality() }
         btnResetZoom.setOnClickListener { resetPlayerZoom() }
+        btnUndo.setOnClickListener { undoLastEdit() }
+        btnRedo.setOnClickListener { redoLastEdit() }
     }
 
     private fun stepFrame(direction: Int) {
@@ -787,6 +799,57 @@ class VideoEditingActivity : AppCompatActivity() {
         }
     }
 
+    private fun updateHistoryButtonsState() {
+        btnUndo.isEnabled = undoHistory.isNotEmpty()
+        btnRedo.isEnabled = redoHistory.isNotEmpty()
+    }
+
+    private fun recordEditHistory(previousUri: Uri?, newUri: Uri?) {
+        if (previousUri == null || newUri == null || previousUri == newUri) {
+            updateHistoryButtonsState()
+            return
+        }
+        undoHistory.add(previousUri)
+        redoHistory.clear()
+        updateHistoryButtonsState()
+    }
+
+    private fun undoLastEdit() {
+        if (undoHistory.isEmpty() || videoUri == null) {
+            Toast.makeText(this, "No hay cambios para deshacer", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val currentUri = videoUri ?: return
+        val previousUri = undoHistory.removeLast()
+        redoHistory.add(currentUri)
+        applyHistoryVideo(previousUri)
+    }
+
+    private fun redoLastEdit() {
+        if (redoHistory.isEmpty() || videoUri == null) {
+            Toast.makeText(this, "No hay cambios para rehacer", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val currentUri = videoUri ?: return
+        val nextUri = redoHistory.removeLast()
+        undoHistory.add(currentUri)
+        applyHistoryVideo(nextUri)
+    }
+
+    private fun applyHistoryVideo(targetUri: Uri) {
+        videoUri = targetUri
+        val filePath = getFilePathFromUri(targetUri) ?: targetUri.path
+        if (!filePath.isNullOrEmpty()) {
+            tempInputFile = File(filePath)
+        }
+        persistAutoSavedProjectState(0L)
+        refreshPlayer()
+        refreshUI()
+        updateHistoryButtonsState()
+    }
+
     private fun setupExoPlayer() {
         restoreAutoSavedProjectState()
         if (videoUri == null) {
@@ -796,6 +859,7 @@ class VideoEditingActivity : AppCompatActivity() {
         if (videoUri != null) {
             player = ExoPlayer.Builder(this).build()
             playerView.player = player
+            updateHistoryButtonsState()
 
             val mediaItem = MediaItem.fromUri(videoUri!!)
             player.setMediaItem(mediaItem)

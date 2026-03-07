@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.10] - 2026-03-07
+### Added
+- Se agregaron botones de **Deshacer** y **Rehacer** en el editor para navegar el historial de ediciones.
+- Se añadió historial en memoria de cambios de video generado por operaciones FFmpeg (trim/crop/text/merge) con actualización automática de estado de botones.
+
 ## [1.0.9] - 2026-03-07
 ### Fixed
 - Corregido `CustomVideoSeeker` para evitar doble callback de seek que provocaba saltos de tiempo erráticos.
