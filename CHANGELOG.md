@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.13] - 2026-03-07
+### Fixed
+- Corregido guardado de proyectos: al elegir guardar al salir, ahora se crea un snapshot local del proyecto (`files/projects/autosave_project.mp4`) para restauración confiable.
+- Restauración del proyecto ahora prioriza el snapshot local; si existe y es válido, se carga desde ahí.
+- Al descartar proyecto se elimina también el snapshot local para evitar estados stale.
+
 ## [1.0.12] - 2026-03-07
 ### Added
 - Al salir del editor ahora se muestra confirmación para **guardar o no guardar** el proyecto.

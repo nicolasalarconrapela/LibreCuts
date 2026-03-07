@@ -1047,7 +1047,7 @@ class VideoEditingActivity : AppCompatActivity() {
             .setMessage(getString(R.string.exit_editor_message))
             .setPositiveButton(getString(R.string.save_project_exit)) { _, _ ->
                 shouldPersistProjectState = true
-                persistAutoSavedProjectState()
+                persistAutoSavedProjectState(forceSnapshot = true)
                 finish()
             }
             .setNegativeButton(getString(R.string.discard_project_exit)) { _, _ ->
@@ -1059,17 +1059,45 @@ class VideoEditingActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun persistAutoSavedProjectState(positionOverride: Long? = null) {
+    private fun persistAutoSavedProjectState(positionOverride: Long? = null, forceSnapshot: Boolean = false) {
         val currentUri = videoUri?.toString() ?: return
         val playbackPosition = positionOverride ?: if (::player.isInitialized) player.currentPosition else 0L
-        projectPrefs.edit()
+
+        val editor = projectPrefs.edit()
             .putString(KEY_PROJECT_VIDEO_URI, currentUri)
             .putLong(KEY_PROJECT_POSITION, playbackPosition)
             .putFloat(KEY_PROJECT_ZOOM, playerZoomLevel)
-            .apply()
+
+        if (forceSnapshot) {
+            val sourcePath = videoUri?.let { getFilePathFromUri(it) ?: it.path }
+            if (!sourcePath.isNullOrEmpty()) {
+                val sourceFile = File(sourcePath)
+                if (sourceFile.exists()) {
+                    val projectDir = File(filesDir, "projects")
+                    if (!projectDir.exists()) {
+                        projectDir.mkdirs()
+                    }
+                    val snapshotFile = File(projectDir, "autosave_project.mp4")
+                    sourceFile.copyTo(snapshotFile, overwrite = true)
+                    editor.putString(KEY_PROJECT_SNAPSHOT_PATH, snapshotFile.absolutePath)
+                }
+            }
+        }
+
+        editor.apply()
     }
 
     private fun restoreAutoSavedProjectState() {
+        val snapshotPath = projectPrefs.getString(KEY_PROJECT_SNAPSHOT_PATH, null)
+        if (!snapshotPath.isNullOrEmpty()) {
+            val snapshotFile = File(snapshotPath)
+            if (snapshotFile.exists() && snapshotFile.length() > 0L) {
+                videoUri = Uri.fromFile(snapshotFile)
+                hasPendingRestoredPlaybackState = true
+                return
+            }
+        }
+
         val savedUri = projectPrefs.getString(KEY_PROJECT_VIDEO_URI, null)
         if (savedUri.isNullOrEmpty()) return
 
@@ -1095,6 +1123,10 @@ class VideoEditingActivity : AppCompatActivity() {
     }
 
     private fun clearAutoSavedProjectState() {
+        val snapshotPath = projectPrefs.getString(KEY_PROJECT_SNAPSHOT_PATH, null)
+        if (!snapshotPath.isNullOrEmpty()) {
+            File(snapshotPath).delete()
+        }
         projectPrefs.edit().clear().apply()
     }
 
@@ -1198,5 +1230,6 @@ class VideoEditingActivity : AppCompatActivity() {
         private const val KEY_PROJECT_VIDEO_URI = "project_video_uri"
         private const val KEY_PROJECT_POSITION = "project_position"
         private const val KEY_PROJECT_ZOOM = "project_zoom"
+        private const val KEY_PROJECT_SNAPSHOT_PATH = "project_snapshot_path"
     }
 }
