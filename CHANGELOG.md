@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.22] - 2026-03-07
+### Added
+- En Home se agregó miniatura en cada proyecto guardado para identificarlo visualmente.
+
+### Changed
+- El `ProjectAdapter` ahora extrae un frame inicial desde el `videoUri` del proyecto y lo cachea para mejorar la carga de la lista.
+
 ## [1.0.21] - 2026-03-07
 ### Changed
 - Los proyectos ahora se guardan solo con datos esenciales (metadatos en `.lcp`): nombre, URI de origen, tamaño, duración, posición y zoom.

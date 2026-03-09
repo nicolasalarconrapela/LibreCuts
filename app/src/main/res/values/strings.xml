@@ -62,4 +62,5 @@
     <string name="project_delete_message">¿Eliminar %1$s?</string>
     <string name="project_delete_success">Proyecto eliminado</string>
     <string name="project_delete_error">No se pudo eliminar el proyecto</string>
+    <string name="project_thumbnail">Miniatura del proyecto</string>
 </resources>
