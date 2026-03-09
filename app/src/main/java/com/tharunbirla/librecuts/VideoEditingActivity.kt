@@ -617,7 +617,7 @@ class VideoEditingActivity : AppCompatActivity() {
             .setView(input)
             .setPositiveButton(getString(R.string.save_project_exit)) { _, _ ->
                 val rawName = input.text?.toString()?.trim().orEmpty()
-                val sanitizedName = rawName.replace(Regex("[^A-Za-z0-9_-]"), "_")
+                val sanitizedName = ProjectStorage.sanitizeProjectName(rawName)
                 if (sanitizedName.isBlank()) {
                     showError(getString(R.string.save_project_name_empty))
                     return@setPositiveButton
@@ -665,24 +665,11 @@ class VideoEditingActivity : AppCompatActivity() {
                     }
                 }
 
-                val fileName = if (projectName.endsWith(".mp4", true)) projectName else "$projectName.mp4"
-
-                val internalProjectDir = File(filesDir, "projects")
-                if (!internalProjectDir.exists()) {
-                    internalProjectDir.mkdirs()
-                }
-                val internalProjectFile = File(internalProjectDir, fileName)
-                sourceFile.copyTo(internalProjectFile, overwrite = true)
-
-                val publicProjectDir = File(
-                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                    "LibreCutsProjects"
+                val (_, publicProjectFile) = ProjectStorage.saveProjectCopies(
+                    this@VideoEditingActivity,
+                    sourceFile,
+                    projectName
                 )
-                if (!publicProjectDir.exists()) {
-                    publicProjectDir.mkdirs()
-                }
-                val publicProjectFile = File(publicProjectDir, fileName)
-                sourceFile.copyTo(publicProjectFile, overwrite = true)
 
                 MediaScannerConnection.scanFile(
                     this@VideoEditingActivity,
@@ -1222,11 +1209,7 @@ class VideoEditingActivity : AppCompatActivity() {
             if (!sourcePath.isNullOrEmpty()) {
                 val sourceFile = File(sourcePath)
                 if (sourceFile.exists()) {
-                    val projectDir = File(filesDir, "projects")
-                    if (!projectDir.exists()) {
-                        projectDir.mkdirs()
-                    }
-                    val snapshotFile = File(projectDir, "autosave_project.mp4")
+                    val snapshotFile = ProjectStorage.getAutoSaveSnapshotFile(this@VideoEditingActivity)
                     sourceFile.copyTo(snapshotFile, overwrite = true)
                     editor.putString(KEY_PROJECT_SNAPSHOT_PATH, snapshotFile.absolutePath)
                 }

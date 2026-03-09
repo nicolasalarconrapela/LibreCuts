@@ -80,14 +80,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadSavedProjects() {
-        val projectDir = File(filesDir, "projects")
-        val projectFiles = if (projectDir.exists()) {
-            projectDir.listFiles { file -> file.isFile && file.extension.equals("mp4", true) }
-                ?.sortedByDescending { it.lastModified() }
-                ?: emptyList()
-        } else {
-            emptyList()
-        }
+        val projectFiles = ProjectStorage.listProjects(this)
 
         projectAdapter.updateProjects(projectFiles)
         binding.instructionText.text = if (projectFiles.isEmpty()) {
@@ -137,23 +130,15 @@ class MainActivity : AppCompatActivity() {
                     return@setPositiveButton
                 }
 
-                val renamedFile = File(projectFile.parentFile, "$newName.mp4")
-                if (renamedFile.exists()) {
+                val internalDir = ProjectStorage.getInternalProjectsDir(this)
+                val newFileName = ProjectStorage.buildProjectFileName(newName)
+                if (File(internalDir, newFileName).exists()) {
                     showToast(getString(R.string.project_rename_exists))
                     return@setPositiveButton
                 }
 
-                val renamed = projectFile.renameTo(renamedFile)
+                val renamed = ProjectStorage.renameProject(this, projectFile, newName)
                 if (renamed) {
-                    val publicDir = File(
-                        android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
-                        "LibreCutsProjects"
-                    )
-                    val publicOld = File(publicDir, projectFile.name)
-                    val publicNew = File(publicDir, renamedFile.name)
-                    if (publicOld.exists()) {
-                        publicOld.renameTo(publicNew)
-                    }
                     showToast(getString(R.string.project_rename_success))
                     loadSavedProjects()
                 } else {
@@ -169,16 +154,7 @@ class MainActivity : AppCompatActivity() {
             .setTitle(getString(R.string.project_delete_title))
             .setMessage(getString(R.string.project_delete_message, projectFile.name))
             .setPositiveButton(getString(R.string.project_action_delete)) { _, _ ->
-                val deleted = projectFile.delete()
-
-                val publicDir = File(
-                    android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
-                    "LibreCutsProjects"
-                )
-                val publicFile = File(publicDir, projectFile.name)
-                if (publicFile.exists()) {
-                    publicFile.delete()
-                }
+                val deleted = ProjectStorage.deleteProject(this, projectFile)
 
                 if (deleted) {
                     showToast(getString(R.string.project_delete_success))

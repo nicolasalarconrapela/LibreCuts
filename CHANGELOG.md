@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.20] - 2026-03-07
+### Added
+- Nueva capa compartida `ProjectStorage` para centralizar implementaciones relacionadas a proyectos (listar, guardar copias, renombrar, eliminar y snapshot autosave).
+
+### Changed
+- Home y editor ahora reutilizan `ProjectStorage`, reduciendo duplicación y mejorando consistencia de CRUD/snapshot entre flujos.
+
 ## [1.0.19] - 2026-03-07
 ### Changed
 - Al guardar proyecto desde el editor, se vuelve automáticamente a Home para ver la lista actualizada de proyectos.
