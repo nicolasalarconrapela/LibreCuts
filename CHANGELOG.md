@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.21] - 2026-03-07
+### Changed
+- Los proyectos ahora se guardan solo con datos esenciales (metadatos en `.lcp`): nombre, URI de origen, tamaño, duración, posición y zoom.
+- Se eliminó el guardado/copia de video para proyectos.
+- El editor aplica posición/zoom al abrir un proyecto desde Home usando metadatos del proyecto.
+
+### Added
+- Nueva estructura `SavedProject` y almacenamiento JSON en `ProjectStorage` para persistencia ligera de proyectos.
+
 ## [1.0.20] - 2026-03-07
 ### Added
 - Nueva capa compartida `ProjectStorage` para centralizar implementaciones relacionadas a proyectos (listar, guardar copias, renombrar, eliminar y snapshot autosave).

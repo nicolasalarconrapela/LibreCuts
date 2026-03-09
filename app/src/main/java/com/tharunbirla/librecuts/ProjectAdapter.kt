@@ -1,17 +1,15 @@
 package com.tharunbirla.librecuts
 
-import android.media.MediaMetadataRetriever
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
-import java.io.File
 
 class ProjectAdapter(
-    private var projects: List<File>,
-    private val onProjectClick: (File) -> Unit,
-    private val onProjectLongClick: (File) -> Unit
+    private var projects: List<SavedProject>,
+    private val onProjectClick: (SavedProject) -> Unit,
+    private val onProjectLongClick: (SavedProject) -> Unit
 ) : RecyclerView.Adapter<ProjectAdapter.ProjectViewHolder>() {
 
     class ProjectViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
@@ -28,9 +26,11 @@ class ProjectAdapter(
         val project = projects[position]
         holder.tvProjectName.text = project.name
 
-        val sizeKb = (project.length() / 1024).coerceAtLeast(1)
-        val duration = getVideoDuration(project)
-        holder.tvProjectMeta.text = "${sizeKb} KB · ${duration}"
+        val sizeKb = (project.sizeBytes / 1024).coerceAtLeast(1)
+        val totalSeconds = (project.durationMs / 1000).toInt().coerceAtLeast(0)
+        val minutes = totalSeconds / 60
+        val seconds = totalSeconds % 60
+        holder.tvProjectMeta.text = "${sizeKb} KB · ${String.format("%02d:%02d", minutes, seconds)}"
 
         holder.itemView.setOnClickListener { onProjectClick(project) }
         holder.itemView.setOnLongClickListener {
@@ -41,24 +41,8 @@ class ProjectAdapter(
 
     override fun getItemCount(): Int = projects.size
 
-    fun updateProjects(newProjects: List<File>) {
+    fun updateProjects(newProjects: List<SavedProject>) {
         projects = newProjects
         notifyDataSetChanged()
-    }
-
-    private fun getVideoDuration(file: File): String {
-        val retriever = MediaMetadataRetriever()
-        return try {
-            retriever.setDataSource(file.absolutePath)
-            val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
-            val totalSeconds = (durationMs / 1000).toInt()
-            val minutes = totalSeconds / 60
-            val seconds = totalSeconds % 60
-            String.format("%02d:%02d", minutes, seconds)
-        } catch (e: Exception) {
-            "--:--"
-        } finally {
-            retriever.release()
-        }
     }
 }

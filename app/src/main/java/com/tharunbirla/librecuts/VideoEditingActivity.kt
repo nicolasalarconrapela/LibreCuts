@@ -649,7 +649,6 @@ class VideoEditingActivity : AppCompatActivity() {
                     withContext(Dispatchers.Main) { showError(getString(R.string.project_save_error)) }
                     return@launch
                 }
-
                 withContext(Dispatchers.Main) {
                     showProjectSaveProgressDialog()
                     updateProjectSaveProgress(1)
@@ -665,17 +664,17 @@ class VideoEditingActivity : AppCompatActivity() {
                     }
                 }
 
-                val (_, publicProjectFile) = ProjectStorage.saveProjectCopies(
-                    this@VideoEditingActivity,
-                    sourceFile,
-                    projectName
-                )
+                val videoDurationMs = if (::player.isInitialized) player.duration.coerceAtLeast(0L) else 0L
+                val playbackPosition = if (::player.isInitialized) player.currentPosition.coerceAtLeast(0L) else 0L
 
-                MediaScannerConnection.scanFile(
-                    this@VideoEditingActivity,
-                    arrayOf(publicProjectFile.absolutePath),
-                    arrayOf("video/mp4"),
-                    null
+                ProjectStorage.saveProjectMetadata(
+                    context = this@VideoEditingActivity,
+                    projectName = projectName,
+                    videoUri = currentVideoUri.toString(),
+                    sizeBytes = sourceFile.length(),
+                    durationMs = videoDurationMs,
+                    playbackPositionMs = playbackPosition,
+                    zoom = playerZoomLevel
                 )
 
                 withContext(Dispatchers.Main) {
@@ -1010,11 +1009,26 @@ class VideoEditingActivity : AppCompatActivity() {
     }
 
     private fun setupExoPlayer() {
-        restoreAutoSavedProjectState()
-        if (videoUri == null) {
-            videoUri = intent.getParcelableExtra("VIDEO_URI")
-            hasPendingRestoredPlaybackState = false
+        val intentVideoUri: Uri? = intent.getParcelableExtra("VIDEO_URI")
+        val openedProjectName = intent.getStringExtra("PROJECT_NAME")
+        val openedProjectPosition = intent.getLongExtra("PROJECT_POSITION", 0L)
+        val hasOpenedProjectPosition = intent.hasExtra("PROJECT_POSITION")
+        val openedProjectZoom = intent.getFloatExtra("PROJECT_ZOOM", 1f)
+        val hasOpenedProjectZoom = intent.hasExtra("PROJECT_ZOOM")
+
+        if (intentVideoUri != null) {
+            videoUri = intentVideoUri
+            hasPendingRestoredPlaybackState = hasOpenedProjectPosition || hasOpenedProjectZoom
+            projectPrefs.edit().apply {
+                putString(KEY_PROJECT_VIDEO_URI, intentVideoUri.toString())
+                if (hasOpenedProjectPosition) putLong(KEY_PROJECT_POSITION, openedProjectPosition)
+                if (hasOpenedProjectZoom) putFloat(KEY_PROJECT_ZOOM, openedProjectZoom)
+                if (!openedProjectName.isNullOrBlank()) putString(KEY_CURRENT_PROJECT_NAME, openedProjectName)
+            }.apply()
+        } else {
+            restoreAutoSavedProjectState()
         }
+
         if (videoUri != null) {
             player = ExoPlayer.Builder(this).build()
             playerView.player = player
@@ -1183,7 +1197,7 @@ class VideoEditingActivity : AppCompatActivity() {
             .setMessage(getString(R.string.exit_editor_message))
             .setPositiveButton(getString(R.string.save_project_exit)) { _, _ ->
                 shouldPersistProjectState = true
-                persistAutoSavedProjectState(forceSnapshot = true)
+                persistAutoSavedProjectState()
                 finish()
             }
             .setNegativeButton(getString(R.string.discard_project_exit)) { _, _ ->
@@ -1195,41 +1209,18 @@ class VideoEditingActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun persistAutoSavedProjectState(positionOverride: Long? = null, forceSnapshot: Boolean = false) {
+    private fun persistAutoSavedProjectState(positionOverride: Long? = null) {
         val currentUri = videoUri?.toString() ?: return
         val playbackPosition = positionOverride ?: if (::player.isInitialized) player.currentPosition else 0L
 
-        val editor = projectPrefs.edit()
+        projectPrefs.edit()
             .putString(KEY_PROJECT_VIDEO_URI, currentUri)
             .putLong(KEY_PROJECT_POSITION, playbackPosition)
             .putFloat(KEY_PROJECT_ZOOM, playerZoomLevel)
-
-        if (forceSnapshot) {
-            val sourcePath = videoUri?.let { getFilePathFromUri(it) ?: it.path }
-            if (!sourcePath.isNullOrEmpty()) {
-                val sourceFile = File(sourcePath)
-                if (sourceFile.exists()) {
-                    val snapshotFile = ProjectStorage.getAutoSaveSnapshotFile(this@VideoEditingActivity)
-                    sourceFile.copyTo(snapshotFile, overwrite = true)
-                    editor.putString(KEY_PROJECT_SNAPSHOT_PATH, snapshotFile.absolutePath)
-                }
-            }
-        }
-
-        editor.apply()
+            .apply()
     }
 
     private fun restoreAutoSavedProjectState() {
-        val snapshotPath = projectPrefs.getString(KEY_PROJECT_SNAPSHOT_PATH, null)
-        if (!snapshotPath.isNullOrEmpty()) {
-            val snapshotFile = File(snapshotPath)
-            if (snapshotFile.exists() && snapshotFile.length() > 0L) {
-                videoUri = Uri.fromFile(snapshotFile)
-                hasPendingRestoredPlaybackState = true
-                return
-            }
-        }
-
         val savedUri = projectPrefs.getString(KEY_PROJECT_VIDEO_URI, null)
         if (savedUri.isNullOrEmpty()) return
 
@@ -1255,10 +1246,6 @@ class VideoEditingActivity : AppCompatActivity() {
     }
 
     private fun clearAutoSavedProjectState() {
-        val snapshotPath = projectPrefs.getString(KEY_PROJECT_SNAPSHOT_PATH, null)
-        if (!snapshotPath.isNullOrEmpty()) {
-            File(snapshotPath).delete()
-        }
         projectPrefs.edit().clear().apply()
     }
 
@@ -1364,7 +1351,6 @@ class VideoEditingActivity : AppCompatActivity() {
         private const val KEY_PROJECT_VIDEO_URI = "project_video_uri"
         private const val KEY_PROJECT_POSITION = "project_position"
         private const val KEY_PROJECT_ZOOM = "project_zoom"
-        private const val KEY_PROJECT_SNAPSHOT_PATH = "project_snapshot_path"
         private const val KEY_CURRENT_PROJECT_NAME = "current_project_name"
     }
 }

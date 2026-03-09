@@ -16,7 +16,6 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.tharunbirla.librecuts.databinding.ActivityMainBinding
-import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
@@ -61,16 +60,16 @@ class MainActivity : AppCompatActivity() {
     private fun setupProjectsList() {
         projectAdapter = ProjectAdapter(
             emptyList(),
-            onProjectClick = { projectFile ->
-                if (!projectFile.exists()) {
+            onProjectClick = { project ->
+                if (project.videoUri.isBlank()) {
                     showToast(getString(R.string.project_open_error))
                     loadSavedProjects()
                     return@ProjectAdapter
                 }
-                navigateToEditingScreen(Uri.fromFile(projectFile))
+                navigateToEditingScreen(project)
             },
-            onProjectLongClick = { projectFile ->
-                showProjectCrudDialog(projectFile)
+            onProjectLongClick = { project ->
+                showProjectCrudDialog(project)
             }
         )
 
@@ -91,7 +90,7 @@ class MainActivity : AppCompatActivity() {
     }
 
 
-    private fun showProjectCrudDialog(projectFile: File) {
+    private fun showProjectCrudDialog(project: SavedProject) {
         val options = arrayOf(
             getString(R.string.project_action_open),
             getString(R.string.project_action_rename),
@@ -99,19 +98,19 @@ class MainActivity : AppCompatActivity() {
         )
 
         MaterialAlertDialogBuilder(this)
-            .setTitle(projectFile.name)
+            .setTitle(project.name)
             .setItems(options) { _, which ->
                 when (which) {
-                    0 -> navigateToEditingScreen(Uri.fromFile(projectFile))
-                    1 -> promptRenameProject(projectFile)
-                    2 -> confirmDeleteProject(projectFile)
+                    0 -> navigateToEditingScreen(project)
+                    1 -> promptRenameProject(project)
+                    2 -> confirmDeleteProject(project)
                 }
             }
             .show()
     }
 
-    private fun promptRenameProject(projectFile: File) {
-        val currentName = projectFile.nameWithoutExtension
+    private fun promptRenameProject(project: SavedProject) {
+        val currentName = project.name
         val input = EditText(this).apply {
             setText(currentName)
             setSelection(currentName.length)
@@ -130,14 +129,7 @@ class MainActivity : AppCompatActivity() {
                     return@setPositiveButton
                 }
 
-                val internalDir = ProjectStorage.getInternalProjectsDir(this)
-                val newFileName = ProjectStorage.buildProjectFileName(newName)
-                if (File(internalDir, newFileName).exists()) {
-                    showToast(getString(R.string.project_rename_exists))
-                    return@setPositiveButton
-                }
-
-                val renamed = ProjectStorage.renameProject(this, projectFile, newName)
+                val renamed = ProjectStorage.renameProject(project, newName)
                 if (renamed) {
                     showToast(getString(R.string.project_rename_success))
                     loadSavedProjects()
@@ -149,12 +141,12 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun confirmDeleteProject(projectFile: File) {
+    private fun confirmDeleteProject(project: SavedProject) {
         MaterialAlertDialogBuilder(this)
             .setTitle(getString(R.string.project_delete_title))
-            .setMessage(getString(R.string.project_delete_message, projectFile.name))
+            .setMessage(getString(R.string.project_delete_message, project.name))
             .setPositiveButton(getString(R.string.project_action_delete)) { _, _ ->
-                val deleted = ProjectStorage.deleteProject(this, projectFile)
+                val deleted = ProjectStorage.deleteProject(project)
 
                 if (deleted) {
                     showToast(getString(R.string.project_delete_success))
@@ -261,6 +253,19 @@ class MainActivity : AppCompatActivity() {
         Log.d("Navigation", "Navigating to editing screen with URI: $videoUri")
         val intent = Intent(this, VideoEditingActivity::class.java)
         intent.putExtra("VIDEO_URI", videoUri)
+        startActivity(intent)
+    }
+
+    private fun navigateToEditingScreen(project: SavedProject) {
+        if (project.videoUri.isBlank()) {
+            showToast(getString(R.string.project_open_error))
+            return
+        }
+        val intent = Intent(this, VideoEditingActivity::class.java)
+        intent.putExtra("VIDEO_URI", Uri.parse(project.videoUri))
+        intent.putExtra("PROJECT_POSITION", project.playbackPositionMs)
+        intent.putExtra("PROJECT_ZOOM", project.zoom)
+        intent.putExtra("PROJECT_NAME", project.name)
         startActivity(intent)
     }
 

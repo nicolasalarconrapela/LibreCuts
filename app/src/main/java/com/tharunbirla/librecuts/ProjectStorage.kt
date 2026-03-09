@@ -1,34 +1,28 @@
 package com.tharunbirla.librecuts
 
 import android.content.Context
-import android.os.Environment
+import org.json.JSONObject
 import java.io.File
+
+data class SavedProject(
+    val file: File,
+    val name: String,
+    val videoUri: String,
+    val sizeBytes: Long,
+    val durationMs: Long,
+    val playbackPositionMs: Long,
+    val zoom: Float,
+    val updatedAt: Long
+)
 
 object ProjectStorage {
 
     private const val INTERNAL_PROJECTS_DIR = "projects"
-    private const val PUBLIC_PROJECTS_DIR = "LibreCutsProjects"
 
     fun getInternalProjectsDir(context: Context): File {
         val dir = File(context.filesDir, INTERNAL_PROJECTS_DIR)
         if (!dir.exists()) dir.mkdirs()
         return dir
-    }
-
-    fun getPublicProjectsDir(): File {
-        val dir = File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-            PUBLIC_PROJECTS_DIR
-        )
-        if (!dir.exists()) dir.mkdirs()
-        return dir
-    }
-
-    fun listProjects(context: Context): List<File> {
-        val dir = getInternalProjectsDir(context)
-        return dir.listFiles { file -> file.isFile && file.extension.equals("mp4", true) }
-            ?.sortedByDescending { it.lastModified() }
-            ?: emptyList()
     }
 
     fun sanitizeProjectName(raw: String): String {
@@ -37,43 +31,75 @@ object ProjectStorage {
 
     fun buildProjectFileName(projectName: String): String {
         val safe = sanitizeProjectName(projectName)
-        return if (safe.endsWith(".mp4", true)) safe else "$safe.mp4"
+        return if (safe.endsWith(".lcp", true)) safe else "$safe.lcp"
     }
 
-    fun saveProjectCopies(context: Context, sourceFile: File, projectName: String): Pair<File, File> {
+    fun listProjects(context: Context): List<SavedProject> {
+        val dir = getInternalProjectsDir(context)
+        val files = dir.listFiles { file -> file.isFile && file.extension.equals("lcp", true) }
+            ?.sortedByDescending { it.lastModified() }
+            ?: emptyList()
+
+        return files.mapNotNull { parseProjectFile(it) }
+    }
+
+    fun saveProjectMetadata(
+        context: Context,
+        projectName: String,
+        videoUri: String,
+        sizeBytes: Long,
+        durationMs: Long,
+        playbackPositionMs: Long,
+        zoom: Float
+    ): File {
         val fileName = buildProjectFileName(projectName)
-        val internalFile = File(getInternalProjectsDir(context), fileName)
-        val publicFile = File(getPublicProjectsDir(), fileName)
-        sourceFile.copyTo(internalFile, overwrite = true)
-        sourceFile.copyTo(publicFile, overwrite = true)
-        return internalFile to publicFile
+        val file = File(getInternalProjectsDir(context), fileName)
+
+        val json = JSONObject()
+            .put("name", projectName)
+            .put("videoUri", videoUri)
+            .put("sizeBytes", sizeBytes)
+            .put("durationMs", durationMs)
+            .put("playbackPositionMs", playbackPositionMs)
+            .put("zoom", zoom)
+            .put("updatedAt", System.currentTimeMillis())
+
+        file.writeText(json.toString())
+        return file
     }
 
-    fun renameProject(context: Context, oldInternalFile: File, newProjectName: String): Boolean {
+    fun renameProject(project: SavedProject, newProjectName: String): Boolean {
         val newFileName = buildProjectFileName(newProjectName)
-        val newInternalFile = File(oldInternalFile.parentFile, newFileName)
-        if (newInternalFile.exists()) return false
+        val newFile = File(project.file.parentFile, newFileName)
+        if (newFile.exists()) return false
 
-        val renamed = oldInternalFile.renameTo(newInternalFile)
+        val renamed = project.file.renameTo(newFile)
         if (!renamed) return false
 
-        val publicDir = getPublicProjectsDir()
-        val publicOld = File(publicDir, oldInternalFile.name)
-        val publicNew = File(publicDir, newFileName)
-        if (publicOld.exists()) {
-            publicOld.renameTo(publicNew)
-        }
+        val updatedJson = JSONObject(newFile.readText()).put("name", newProjectName)
+        newFile.writeText(updatedJson.toString())
         return true
     }
 
-    fun deleteProject(context: Context, internalFile: File): Boolean {
-        val deleted = internalFile.delete()
-        val publicFile = File(getPublicProjectsDir(), internalFile.name)
-        if (publicFile.exists()) publicFile.delete()
-        return deleted
+    fun deleteProject(project: SavedProject): Boolean {
+        return project.file.delete()
     }
 
-    fun getAutoSaveSnapshotFile(context: Context): File {
-        return File(getInternalProjectsDir(context), "autosave_project.mp4")
+    private fun parseProjectFile(file: File): SavedProject? {
+        return try {
+            val json = JSONObject(file.readText())
+            SavedProject(
+                file = file,
+                name = json.optString("name", file.nameWithoutExtension),
+                videoUri = json.optString("videoUri", ""),
+                sizeBytes = json.optLong("sizeBytes", 0L),
+                durationMs = json.optLong("durationMs", 0L),
+                playbackPositionMs = json.optLong("playbackPositionMs", 0L),
+                zoom = json.optDouble("zoom", 1.0).toFloat(),
+                updatedAt = json.optLong("updatedAt", file.lastModified())
+            )
+        } catch (e: Exception) {
+            null
+        }
     }
 }
