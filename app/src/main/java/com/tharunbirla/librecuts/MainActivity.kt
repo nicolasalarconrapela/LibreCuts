@@ -23,9 +23,17 @@ class MainActivity : AppCompatActivity() {
     private lateinit var requestPermissionsLauncher: ActivityResultLauncher<Array<String>>
     private lateinit var projectAdapter: ProjectAdapter
     private val selectVideoLauncher =
-        registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
             if (uri != null) {
                 Log.d("VideoSelection", "Video selected: $uri")
+                try {
+                    contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (e: SecurityException) {
+                    Log.w("VideoSelection", "No se pudo persistir permiso del URI: ${e.message}")
+                }
                 navigateToEditingScreen(uri)
             } else {
                 Log.e("VideoSelectionError", "No video selected")
@@ -249,7 +257,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun selectVideo() {
         Log.d("VideoSelection", "Launching video selector.")
-        selectVideoLauncher.launch("video/*")
+        selectVideoLauncher.launch(arrayOf("video/*"))
     }
 
     private fun navigateToEditingScreen(videoUri: Uri) {

@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.26] - 2026-03-07
+### Fixed
+- Mejorado guardado de proyectos para videos muy grandes (ej. ~40GB / 12h) sin depender de rutas de archivo (`_data`) ni copias locales.
+- El tamaño del video ahora se resuelve de forma robusta vía `OpenableColumns.SIZE` y `FileDescriptor.statSize` cuando aplica.
+
+### Changed
+- El guardado de metadatos (`.lcp`) ya no falla si el URI no expone ruta de archivo tradicional.
+
+- La selección de video en Home ahora usa `OpenDocument` con permiso persistente de lectura para evitar pérdida de acceso en archivos grandes y sesiones largas.
+
 ## [1.0.25] - 2026-03-07
 ### Changed
 - En el editor, al pulsar Home ahora se verifica si el proyecto ya fue guardado (`.lcp` existente):

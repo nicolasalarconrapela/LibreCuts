@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import android.util.Log
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
@@ -638,17 +639,7 @@ class VideoEditingActivity : AppCompatActivity() {
                     return@launch
                 }
 
-                val inputPath = getFilePathFromUri(currentVideoUri) ?: currentVideoUri.path
-                if (inputPath.isNullOrEmpty()) {
-                    withContext(Dispatchers.Main) { showError(getString(R.string.project_save_error)) }
-                    return@launch
-                }
-
-                val sourceFile = File(inputPath)
-                if (!sourceFile.exists()) {
-                    withContext(Dispatchers.Main) { showError(getString(R.string.project_save_error)) }
-                    return@launch
-                }
+                val sourceSizeBytes = resolveVideoSizeBytes(currentVideoUri)
                 withContext(Dispatchers.Main) {
                     showProjectSaveProgressDialog()
                     updateProjectSaveProgress(1)
@@ -671,7 +662,7 @@ class VideoEditingActivity : AppCompatActivity() {
                     context = this@VideoEditingActivity,
                     projectName = projectName,
                     videoUri = currentVideoUri.toString(),
-                    sizeBytes = sourceFile.length(),
+                    sizeBytes = sourceSizeBytes,
                     durationMs = videoDurationMs,
                     playbackPositionMs = playbackPosition,
                     zoom = playerZoomLevel
@@ -1085,6 +1076,39 @@ class VideoEditingActivity : AppCompatActivity() {
         }
     }
 
+
+
+    private fun resolveVideoSizeBytes(uri: Uri): Long {
+        if (uri.scheme == "file") {
+            val filePath = uri.path
+            if (!filePath.isNullOrEmpty()) {
+                val file = File(filePath)
+                if (file.exists()) return file.length().coerceAtLeast(0L)
+            }
+        }
+
+        try {
+            contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    if (sizeIndex != -1) {
+                        return cursor.getLong(sizeIndex).coerceAtLeast(0L)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("ProjectSize", "No se pudo leer tamaño por OpenableColumns: ${e.message}")
+        }
+
+        return try {
+            contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                pfd.statSize.takeIf { it >= 0L } ?: 0L
+            } ?: 0L
+        } catch (e: Exception) {
+            Log.e("ProjectSize", "No se pudo leer tamaño por FileDescriptor: ${e.message}")
+            0L
+        }
+    }
 
     private fun getFilePathFromUri(uri: Uri): String? {
         var filePath: String? = null
