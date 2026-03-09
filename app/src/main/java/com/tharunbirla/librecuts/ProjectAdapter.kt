@@ -7,13 +7,15 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.ImageButton
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 
 class ProjectAdapter(
     private var projects: List<SavedProject>,
     private val onProjectClick: (SavedProject) -> Unit,
-    private val onProjectLongClick: (SavedProject) -> Unit
+    private val onProjectLongClick: (SavedProject) -> Unit,
+    private val onProjectDeleteClick: (SavedProject) -> Unit
 ) : RecyclerView.Adapter<ProjectAdapter.ProjectViewHolder>() {
 
     private val thumbnailCache = mutableMapOf<String, Bitmap?>()
@@ -22,6 +24,7 @@ class ProjectAdapter(
         val ivProjectThumbnail: ImageView = itemView.findViewById(R.id.ivProjectThumbnail)
         val tvProjectName: TextView = itemView.findViewById(R.id.tvProjectName)
         val tvProjectMeta: TextView = itemView.findViewById(R.id.tvProjectMeta)
+        val btnDeleteProject: ImageButton = itemView.findViewById(R.id.btnDeleteProject)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ProjectViewHolder {
@@ -42,6 +45,7 @@ class ProjectAdapter(
         bindProjectThumbnail(holder, project)
 
         holder.itemView.setOnClickListener { onProjectClick(project) }
+        holder.btnDeleteProject.setOnClickListener { onProjectDeleteClick(project) }
         holder.itemView.setOnLongClickListener {
             onProjectLongClick(project)
             true

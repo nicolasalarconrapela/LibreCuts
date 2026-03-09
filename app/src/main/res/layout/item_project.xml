@@ -40,4 +40,15 @@
             android:textSize="12sp" />
     </LinearLayout>
 
+    <ImageButton
+        android:id="@+id/btnDeleteProject"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:layout_marginStart="8dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/project_action_delete"
+        android:padding="6dp"
+        android:src="@android:drawable/ic_menu_delete"
+        android:tint="@android:color/white" />
+
 </LinearLayout>

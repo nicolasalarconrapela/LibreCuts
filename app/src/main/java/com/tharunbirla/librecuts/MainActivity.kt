@@ -70,6 +70,9 @@ class MainActivity : AppCompatActivity() {
             },
             onProjectLongClick = { project ->
                 showProjectCrudDialog(project)
+            },
+            onProjectDeleteClick = { project ->
+                confirmDeleteProject(project)
             }
         )
 

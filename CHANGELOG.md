@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.23] - 2026-03-07
+### Added
+- En Home ahora cada proyecto tiene un botón visible de eliminar, sin depender de pulsación larga.
+
+### Changed
+- El listado de proyectos conecta ese botón directo al flujo de confirmación y borrado del proyecto.
+
 ## [1.0.22] - 2026-03-07
 ### Added
 - En Home se agregó miniatura en cada proyecto guardado para identificarlo visualmente.
