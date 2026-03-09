@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.0.24] - 2026-03-07
+### Changed
+- En Home el nombre del proyecto se fuerza a negrita también desde código en el adapter para asegurar consistencia visual en todos los dispositivos/temas.
+
 ## [1.0.23] - 2026-03-07
 ### Added
 - En Home ahora cada proyecto tiene un botón visible de eliminar, sin depender de pulsación larga.

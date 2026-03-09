@@ -1,6 +1,7 @@
 package com.tharunbirla.librecuts
 
 import android.graphics.Bitmap
+import android.graphics.Typeface
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.view.LayoutInflater
@@ -35,6 +36,7 @@ class ProjectAdapter(
     override fun onBindViewHolder(holder: ProjectViewHolder, position: Int) {
         val project = projects[position]
         holder.tvProjectName.text = project.name
+        holder.tvProjectName.setTypeface(holder.tvProjectName.typeface, Typeface.BOLD)
 
         val sizeKb = (project.sizeBytes / 1024).coerceAtLeast(1)
         val totalSeconds = (project.durationMs / 1000).toInt().coerceAtLeast(0)
