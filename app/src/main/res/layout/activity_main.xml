@@ -2,30 +2,49 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000">
+    android:background="#000000"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/tvSavedProjectsTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/saved_projects"
+        android:textColor="@android:color/white"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvSavedProjects"
+        android:layout_width="match_parent"
+        android:layout_height="220dp"
+        android:layout_below="@id/tvSavedProjectsTitle"
+        android:layout_marginTop="12dp" />
 
     <ImageView
         android:id="@+id/addVideoButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_centerInParent="true"
-        android:src="@drawable/ic_add_24"
-        android:contentDescription="@string/add_video"
-        android:padding="20dp"
+        android:layout_below="@id/rvSavedProjects"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="24dp"
         android:background="@drawable/button_background"
-        android:elevation="5dp"
         android:clickable="true"
-        android:focusable="true" />
+        android:contentDescription="@string/add_video"
+        android:elevation="5dp"
+        android:focusable="true"
+        android:padding="20dp"
+        android:src="@drawable/ic_add_24" />
 
     <TextView
         android:id="@+id/instructionText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/create_engaging_videos"
-        android:textColor="#FFFFFF"
-        android:textSize="18sp"
         android:layout_below="@id/addVideoButton"
         android:layout_centerHorizontal="true"
-        android:layout_marginTop="20dp"/>
+        android:layout_marginTop="20dp"
+        android:text="@string/create_engaging_videos"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp" />
 
 </RelativeLayout>

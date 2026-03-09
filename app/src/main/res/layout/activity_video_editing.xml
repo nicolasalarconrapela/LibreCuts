@@ -34,6 +34,15 @@
             android:layout_alignParentEnd="true"
             android:gravity="end">
 
+            <Button
+                android:id="@+id/btnSaveProject"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/rounded_button_dark"
+                android:text="@string/save_project_button"
+                android:textAllCaps="false" />
+
             <ImageButton
                 android:id="@+id/btnSave"
                 android:minWidth="48dp"
@@ -100,6 +109,126 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"/>
         </FrameLayout>
+
+        <LinearLayout
+            android:id="@+id/frameStepControls"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal"
+            android:layout_gravity="center_horizontal">
+
+            <ImageButton
+                android:id="@+id/btnPrevFrame"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="48dp"
+                android:minHeight="48dp"
+                android:padding="8dp"
+                android:src="@drawable/ic_trim_left_24"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/previous_frame" />
+
+            <ImageButton
+                android:id="@+id/btnNextFrame"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="48dp"
+                android:minHeight="48dp"
+                android:padding="8dp"
+                android:src="@drawable/ic_trim_right_24"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/next_frame" />
+
+            <ImageButton
+                android:id="@+id/btnCaptureFrame"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="48dp"
+                android:minHeight="48dp"
+                android:padding="8dp"
+                android:src="@drawable/ic_save_24"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/capture_frame" />
+
+            <ImageButton
+                android:id="@+id/btnResetZoom"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="48dp"
+                android:minHeight="48dp"
+                android:padding="8dp"
+                android:src="@drawable/ic_crop_16_9_24"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/reset_zoom" />
+        </LinearLayout>
+
+
+
+        <LinearLayout
+            android:id="@+id/historyControls"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal"
+            android:layout_gravity="center_horizontal">
+
+            <Button
+                android:id="@+id/btnUndo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:background="@drawable/rounded_button_dark"
+                android:text="@string/undo" />
+
+            <Button
+                android:id="@+id/btnRedo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/rounded_button_dark"
+                android:text="@string/redo" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/trimPreviewControls"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="20dp"
+            android:layout_marginEnd="20dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <com.google.android.material.slider.RangeSlider
+                android:id="@+id/trimRangeSlider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:values="@array/slider_values" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="end"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnCancelTrimInline"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:background="@drawable/rounded_button_dark"
+                    android:text="@string/cancel" />
+
+                <Button
+                    android:id="@+id/btnApplyTrimInline"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/rounded_button"
+                    android:text="@string/done" />
+            </LinearLayout>
+
+        </LinearLayout>
     </LinearLayout>
 
     <LinearLayout

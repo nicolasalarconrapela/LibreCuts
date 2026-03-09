@@ -6,20 +6,28 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import android.util.Log
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
+import android.widget.ProgressBar
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -41,9 +49,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileOutputStream
 import java.util.Locale
 
 
@@ -55,14 +66,41 @@ class VideoEditingActivity : AppCompatActivity() {
     private lateinit var tvDuration: TextView
     private lateinit var frameRecyclerView: RecyclerView
     private lateinit var customVideoSeeker: CustomVideoSeeker
+    private lateinit var trimPreviewControls: View
+    private lateinit var trimRangeSlider: RangeSlider
+    private lateinit var btnApplyTrimInline: Button
+    private lateinit var btnCancelTrimInline: Button
+    private lateinit var btnPrevFrame: ImageButton
+    private lateinit var btnNextFrame: ImageButton
+    private lateinit var btnCaptureFrame: ImageButton
+    private lateinit var btnResetZoom: ImageButton
+    private lateinit var btnUndo: Button
+    private lateinit var btnRedo: Button
+    private lateinit var btnSaveProject: Button
+    private lateinit var scaleGestureDetector: ScaleGestureDetector
+    private var playerZoomLevel: Float = 1f
+    private var frameStepMs: Long = 33L
     private var videoUri: Uri? = null
     private var videoFileName: String = ""
     private lateinit var tempInputFile: File
     private lateinit var loadingScreen: View
     private lateinit var lottieAnimationView: LottieAnimationView
+    private var exportProgressDialog: AlertDialog? = null
+    private var exportProgressJob: Job? = null
+    private var exportProgressBar: ProgressBar? = null
+    private var exportProgressText: TextView? = null
+    private var projectSaveProgressDialog: AlertDialog? = null
+    private var projectSaveProgressJob: Job? = null
+    private var projectSaveProgressBar: ProgressBar? = null
+    private var projectSaveProgressText: TextView? = null
+    private val projectPrefs by lazy { getSharedPreferences(PROJECT_PREFS, Context.MODE_PRIVATE) }
 
     private var activeFFmpegSessions = mutableListOf<FFmpegSession>()
+    private val undoHistory = mutableListOf<Uri>()
+    private val redoHistory = mutableListOf<Uri>()
     private var isVideoLoaded = false
+    private var hasPendingRestoredPlaybackState = false
+    private var shouldPersistProjectState = true
     private val coroutineScope = CoroutineScope(Dispatchers.Main + Job())
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -91,6 +129,12 @@ class VideoEditingActivity : AppCompatActivity() {
         setupExoPlayer()
         setupCustomSeeker()
         setupFrameRecyclerView()
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                promptSaveProjectBeforeExit()
+            }
+        })
     }
 
     private fun initializeViews() {
@@ -98,9 +142,25 @@ class VideoEditingActivity : AppCompatActivity() {
         tvDuration = findViewById(R.id.tvDuration)
         frameRecyclerView = findViewById(R.id.frameRecyclerView)
         customVideoSeeker = findViewById(R.id.customVideoSeeker)
+        trimPreviewControls = findViewById(R.id.trimPreviewControls)
+        trimRangeSlider = findViewById(R.id.trimRangeSlider)
+        btnApplyTrimInline = findViewById(R.id.btnApplyTrimInline)
+        btnCancelTrimInline = findViewById(R.id.btnCancelTrimInline)
+        btnPrevFrame = findViewById(R.id.btnPrevFrame)
+        btnNextFrame = findViewById(R.id.btnNextFrame)
+        btnCaptureFrame = findViewById(R.id.btnCaptureFrame)
+        btnResetZoom = findViewById(R.id.btnResetZoom)
+        btnUndo = findViewById(R.id.btnUndo)
+        btnRedo = findViewById(R.id.btnRedo)
+        btnSaveProject = findViewById(R.id.btnSaveProject)
+
+        setupTrimPreviewControls()
+        setupFrameStepControls()
+        setupZoomControls()
 
         // Set up button click listeners
-        findViewById<ImageButton>(R.id.btnHome).setOnClickListener { onBackPressedDispatcher.onBackPressed()}
+        findViewById<ImageButton>(R.id.btnHome).setOnClickListener { promptSaveProjectBeforeExit() }
+        btnSaveProject.setOnClickListener { onSaveProjectClicked() }
         findViewById<ImageButton>(R.id.btnSave).setOnClickListener { saveAction() }
         findViewById<ImageButton>(R.id.btnTrim).setOnClickListener { trimAction() }
         findViewById<ImageButton>(R.id.btnText).setOnClickListener { textAction() }
@@ -192,7 +252,10 @@ class VideoEditingActivity : AppCompatActivity() {
                             Toast.makeText(this@VideoEditingActivity, "Videos merged successfully!", Toast.LENGTH_SHORT).show()
 
                             // Update video URI to the merged video
-                            videoUri = Uri.parse(outputPath)
+                            val previousUri = videoUri
+                            videoUri = Uri.fromFile(File(outputPath))
+                            recordEditHistory(previousUri, videoUri)
+                            persistAutoSavedProjectState(0L)
                             refreshPlayer() // Refresh player with new video
                             refreshUI()     // Refresh UI
                         } else {
@@ -251,18 +314,19 @@ class VideoEditingActivity : AppCompatActivity() {
     }
 
     private fun cropVideo(aspectRatio: String) {
-        // Retrieve the video URI from the intent
-        val videoUri = intent.getParcelableExtra<Uri>("VIDEO_URI")
-        if (videoUri == null) {
+        val currentVideoUri = videoUri
+        if (currentVideoUri == null) {
             Toast.makeText(this, "Error retrieving video URI", Toast.LENGTH_SHORT).show()
             return
         }
 
-        // Fetch video metadata asynchronously to get the file path
         lifecycleScope.launch {
             try {
-                val media = getVideoMetadata(this@VideoEditingActivity, videoUri)
-                val inputPath = media.uri.toString() // Get the actual file path
+                val inputPath = getFilePathFromUri(currentVideoUri) ?: currentVideoUri.path
+                if (inputPath.isNullOrEmpty()) {
+                    showError("Error loading video path")
+                    return@launch
+                }
                 val outputDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
 
                 if (!outputDir.exists()) {
@@ -385,62 +449,65 @@ class VideoEditingActivity : AppCompatActivity() {
     @SuppressLint("InflateParams")
     private fun trimAction() {
         val videoDuration = player.duration
-
-        // Validate the video duration
         if (videoDuration <= 0) {
             Toast.makeText(this, "Video duration is invalid.", Toast.LENGTH_SHORT).show()
             return
         }
 
-        // Create BottomSheetDialog
-        val bottomSheetDialog = BottomSheetDialog(this@VideoEditingActivity)
-        val sheetView = layoutInflater.inflate(R.layout.trim_bottom_sheet_dialog, null)
+        val isOpening = trimPreviewControls.visibility != View.VISIBLE
+        trimPreviewControls.visibility = if (isOpening) View.VISIBLE else View.GONE
 
-        val rangeSlider: RangeSlider = sheetView.findViewById(R.id.rangeSlider)
+        if (isOpening) {
+            configureTrimRangeSlider(videoDuration)
+        }
+    }
 
-        // Convert duration to minutes and seconds
-        val durationInMillis: Long = videoDuration
-        val totalMinutes = (durationInMillis / 60000).toInt()
-        val totalSeconds = ((durationInMillis % 60000) / 1000).toInt()
+    private fun setupTrimPreviewControls() {
+        trimRangeSlider.addOnChangeListener { slider, value, fromUser ->
+            if (!fromUser) return@addOnChangeListener
 
-        // Format as float for the RangeSlider (00.00)
-        val formattedValueTo = (totalMinutes * 60 + totalSeconds).toFloat() // Total seconds as float
-
-        rangeSlider.valueFrom = 0f
-        rangeSlider.valueTo = formattedValueTo
-        rangeSlider.values = listOf(0f, formattedValueTo) // Set initial range
-
-        // Log the values for debugging
-        Log.d("RangeSlider", "Value from: ${rangeSlider.valueFrom}, Value to: ${rangeSlider.valueTo}")
-
-        rangeSlider.addOnChangeListener { slider, value, fromUser ->
-            val start = slider.values[0].toLong() * 1000 // Convert to milliseconds
-            val end = slider.values[1].toLong() * 1000 // Convert to milliseconds
-
-            // Update the player’s playback position based on the start value
-            if (fromUser) {
-                if (value == slider.values[0]) {
-                    player.seekTo(start)
-                }
-                else if (value == slider.values[1]) {
-                    player.seekTo(end)
-                }
+            val start = slider.values[0].toLong() * 1000
+            val end = slider.values[1].toLong() * 1000
+            if (value == slider.values[0]) {
+                player.seekTo(start)
+            } else if (value == slider.values[1]) {
+                player.seekTo(end)
             }
         }
 
-        // Set up button listeners
-        sheetView.findViewById<Button>(R.id.btnDoneTrim).setOnClickListener {
-            trimVideo(rangeSlider.values[0].toLong(), rangeSlider.values[1].toLong())
+        btnApplyTrimInline.setOnClickListener {
+            val start = trimRangeSlider.values[0].toLong()
+            val end = trimRangeSlider.values[1].toLong()
+            trimPreviewControls.visibility = View.GONE
+            trimVideo(start, end)
         }
 
-        bottomSheetDialog.setContentView(sheetView)
-        bottomSheetDialog.show()
+        btnCancelTrimInline.setOnClickListener {
+            trimPreviewControls.visibility = View.GONE
+        }
+    }
+
+    private fun configureTrimRangeSlider(videoDuration: Long) {
+        val totalSeconds = (videoDuration / 1000f).coerceAtLeast(1f)
+        trimRangeSlider.valueFrom = 0f
+        trimRangeSlider.valueTo = totalSeconds
+        trimRangeSlider.values = listOf(0f, totalSeconds)
+        Log.d("RangeSlider", "Value from: ${trimRangeSlider.valueFrom}, Value to: ${trimRangeSlider.valueTo}")
     }
 
     private fun trimVideo(trimBeginingTime: Long, trimEndTime: Long) {
         lifecycleScope.launch {
-            val media = videoUri?.let { getVideoMetadata(this@VideoEditingActivity, it) }
-            val realFilePath = media?.uri.toString()
+            val currentVideoUri = videoUri
+            if (currentVideoUri == null) {
+                showError("Error loading video")
+                return@launch
+            }
+
+            val realFilePath = getFilePathFromUri(currentVideoUri) ?: currentVideoUri.path
+            if (realFilePath.isNullOrEmpty()) {
+                showError("Error loading video path")
+                return@launch
+            }
 
             val outputDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
             if (!outputDir.exists()) {
@@ -456,6 +523,7 @@ class VideoEditingActivity : AppCompatActivity() {
 
     private fun executeFFmpegCommand(command: String, outputPath: String) {
         coroutineScope.launch {
+            loadingScreen.visibility = View.VISIBLE
             try {
                 // Cancel any ongoing FFmpeg operations
                 FFmpegKit.cancel()
@@ -467,11 +535,16 @@ class VideoEditingActivity : AppCompatActivity() {
                 activeFFmpegSessions.add(session)
 
                 if (ReturnCode.isSuccess(session.returnCode)) {
-                    videoUri = Uri.parse(outputPath)
+                    val previousUri = videoUri
+                    tempInputFile = File(outputPath)
+                    videoUri = Uri.fromFile(File(outputPath))
+                    recordEditHistory(previousUri, videoUri)
+                    persistAutoSavedProjectState(0L)
                     refreshPlayer()
                     refreshUI()
                 } else {
                     showError("Error processing video: ${session.returnCode}")
+                    loadingScreen.visibility = View.GONE
                 }
 
                 // Remove completed session
@@ -479,6 +552,7 @@ class VideoEditingActivity : AppCompatActivity() {
 
             } catch (e: Exception) {
                 showError("Error executing command: ${e.message}")
+                loadingScreen.visibility = View.GONE
             }
         }
     }
@@ -515,24 +589,446 @@ class VideoEditingActivity : AppCompatActivity() {
             seekTo(0) // Seek to the start of the video
         }
 
+        updateFrameStepFromVideo(videoUri)
+        resetPlayerZoom()
+
         // Update the custom seeker to reflect the new video's duration
         customVideoSeeker.setVideoDuration(player.duration)
         updateDurationDisplay(0, player.duration.toInt()) // Reset duration display
     }
 
 
+    private fun onSaveProjectClicked() {
+        val existingProjectName = projectPrefs.getString(KEY_CURRENT_PROJECT_NAME, null)
+        if (existingProjectName.isNullOrBlank()) {
+            promptProjectNameAndSave()
+        } else {
+            saveProjectToDeviceAction(existingProjectName)
+        }
+    }
+
+    private fun promptProjectNameAndSave() {
+        val input = EditText(this).apply {
+            hint = getString(R.string.save_project_name_hint)
+            setSingleLine(true)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.save_project_name_title))
+            .setView(input)
+            .setPositiveButton(getString(R.string.save_project_exit)) { _, _ ->
+                val rawName = input.text?.toString()?.trim().orEmpty()
+                val sanitizedName = ProjectStorage.sanitizeProjectName(rawName)
+                if (sanitizedName.isBlank()) {
+                    showError(getString(R.string.save_project_name_empty))
+                    return@setPositiveButton
+                }
+                projectPrefs.edit().putString(KEY_CURRENT_PROJECT_NAME, sanitizedName).apply()
+                saveProjectToDeviceAction(sanitizedName)
+            }
+            .setNegativeButton(getString(R.string.cancel), null)
+            .show()
+    }
+
+    private fun saveProjectToDeviceAction(projectName: String) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val currentVideoUri = videoUri
+                if (currentVideoUri == null) {
+                    withContext(Dispatchers.Main) { showError(getString(R.string.project_save_error)) }
+                    return@launch
+                }
+
+                val sourceSizeBytes = resolveVideoSizeBytes(currentVideoUri)
+                withContext(Dispatchers.Main) {
+                    showProjectSaveProgressDialog()
+                    updateProjectSaveProgress(1)
+                }
+
+                projectSaveProgressJob?.cancel()
+                projectSaveProgressJob = lifecycleScope.launch {
+                    var progress = 1
+                    while (isActive && progress < 95) {
+                        delay(150)
+                        progress += 1
+                        updateProjectSaveProgress(progress)
+                    }
+                }
+
+                val videoDurationMs = if (::player.isInitialized) player.duration.coerceAtLeast(0L) else 0L
+                val playbackPosition = if (::player.isInitialized) player.currentPosition.coerceAtLeast(0L) else 0L
+
+                ProjectStorage.saveProjectMetadata(
+                    context = this@VideoEditingActivity,
+                    projectName = projectName,
+                    videoUri = currentVideoUri.toString(),
+                    sizeBytes = sourceSizeBytes,
+                    durationMs = videoDurationMs,
+                    playbackPositionMs = playbackPosition,
+                    zoom = playerZoomLevel
+                )
+
+                withContext(Dispatchers.Main) {
+                    projectSaveProgressJob?.cancel()
+                    updateProjectSaveProgress(100)
+                    delay(250)
+                    dismissProjectSaveProgressDialog()
+                    Toast.makeText(this@VideoEditingActivity, getString(R.string.project_saved_device), Toast.LENGTH_SHORT).show()
+                    finish()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    projectSaveProgressJob?.cancel()
+                    dismissProjectSaveProgressDialog()
+                    showError("${getString(R.string.project_save_error)}: ${e.message}")
+                }
+            }
+        }
+    }
+
+    private fun showProjectSaveProgressDialog() {
+        if (projectSaveProgressDialog?.isShowing == true) return
+
+        val dialogView = layoutInflater.inflate(R.layout.export_progress_dialog, null)
+        projectSaveProgressBar = dialogView.findViewById(R.id.progressExport)
+        projectSaveProgressText = dialogView.findViewById(R.id.tvExportPercent)
+        dialogView.findViewById<TextView>(R.id.tvExportTitle).text = getString(R.string.project_saving_title)
+
+        projectSaveProgressDialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(false)
+            .create()
+
+        projectSaveProgressDialog?.show()
+    }
+
+    private fun updateProjectSaveProgress(progress: Int) {
+        val safeProgress = progress.coerceIn(1, 100)
+        projectSaveProgressBar?.progress = safeProgress
+        projectSaveProgressText?.text = "$safeProgress%"
+    }
+
+    private fun dismissProjectSaveProgressDialog() {
+        projectSaveProgressDialog?.dismiss()
+        projectSaveProgressDialog = null
+        projectSaveProgressBar = null
+        projectSaveProgressText = null
+    }
+
     private fun saveAction() {
-        // Placeholder for future implementation of save functionality
+        lifecycleScope.launch {
+            val currentVideoUri = videoUri
+            if (currentVideoUri == null) {
+                showError("Error loading video")
+                return@launch
+            }
+
+            val inputPath = getFilePathFromUri(currentVideoUri) ?: currentVideoUri.path
+            if (inputPath.isNullOrEmpty()) {
+                showError("Error loading video path")
+                return@launch
+            }
+
+            val outputDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            if (!outputDir.exists()) {
+                outputDir.mkdirs()
+            }
+
+            val outputPath = File(outputDir, "saved_video_${System.currentTimeMillis()}.mp4").absolutePath
+            val command = "-i \"$inputPath\" -map 0 -c:v copy -c:a copy -c:s copy -dn \"$outputPath\""
+
+            showExportProgressDialog()
+            updateExportProgress(1)
+
+            exportProgressJob?.cancel()
+            exportProgressJob = launch {
+                var simulatedProgress = 1
+                while (isActive && simulatedProgress < 99) {
+                    delay(300)
+                    simulatedProgress += 1
+                    updateExportProgress(simulatedProgress)
+                }
+            }
+
+            try {
+                val session = withContext(Dispatchers.IO) {
+                    FFmpegKit.execute(command)
+                }
+
+                exportProgressJob?.cancel()
+
+                if (ReturnCode.isSuccess(session.returnCode)) {
+                    val outputFile = File(outputPath)
+                    if (!outputFile.exists() || outputFile.length() <= 0L) {
+                        dismissExportProgressDialog()
+                        showError("Error saving video: output file was not generated")
+                        return@launch
+                    }
+
+                    MediaScannerConnection.scanFile(
+                        this@VideoEditingActivity,
+                        arrayOf(outputFile.absolutePath),
+                        arrayOf("video/mp4"),
+                        null
+                    )
+
+                    updateExportProgress(100)
+                    delay(300)
+                    dismissExportProgressDialog()
+                    Toast.makeText(this@VideoEditingActivity, getString(R.string.export_success), Toast.LENGTH_SHORT).show()
+                } else {
+                    dismissExportProgressDialog()
+                    showError("Error saving video: ${session.returnCode}")
+                }
+            } catch (e: Exception) {
+                exportProgressJob?.cancel()
+                dismissExportProgressDialog()
+                showError("Error saving video: ${e.message}")
+            }
+        }
+    }
+
+    private fun showExportProgressDialog() {
+        if (exportProgressDialog?.isShowing == true) return
+
+        val dialogView = layoutInflater.inflate(R.layout.export_progress_dialog, null)
+        exportProgressBar = dialogView.findViewById(R.id.progressExport)
+        exportProgressText = dialogView.findViewById(R.id.tvExportPercent)
+
+        exportProgressDialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(false)
+            .create()
+
+        exportProgressDialog?.show()
+    }
+
+    private fun updateExportProgress(progress: Int) {
+        val safeProgress = progress.coerceIn(1, 100)
+        exportProgressBar?.progress = safeProgress
+        exportProgressText?.text = "$safeProgress%"
+    }
+
+    private fun dismissExportProgressDialog() {
+        exportProgressDialog?.dismiss()
+        exportProgressDialog = null
+        exportProgressBar = null
+        exportProgressText = null
+    }
+
+
+    private fun setupFrameStepControls() {
+        btnPrevFrame.setOnClickListener { stepFrame(-1) }
+        btnNextFrame.setOnClickListener { stepFrame(1) }
+        btnCaptureFrame.setOnClickListener { captureCurrentFrameInOriginalQuality() }
+        btnResetZoom.setOnClickListener { resetPlayerZoom() }
+        btnUndo.setOnClickListener { undoLastEdit() }
+        btnRedo.setOnClickListener { redoLastEdit() }
+    }
+
+    private fun stepFrame(direction: Int) {
+        val duration = player.duration
+        if (duration <= 0) return
+
+        val targetPosition = (player.currentPosition + (frameStepMs * direction)).coerceIn(0L, duration)
+        player.seekTo(targetPosition)
+        updateDurationDisplay(targetPosition.toInt(), duration.toInt())
+    }
+
+    private fun updateFrameStepFromVideo(uri: Uri?) {
+        if (uri == null) {
+            frameStepMs = 33L
+            return
+        }
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            val retriever = MediaMetadataRetriever()
+            val step = try {
+                val path = getFilePathFromUri(uri) ?: uri.path
+                if (!path.isNullOrEmpty()) {
+                    retriever.setDataSource(path)
+                    val frameRate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)?.toFloatOrNull()
+                    if (frameRate != null && frameRate > 0f) {
+                        (1000f / frameRate).toLong().coerceAtLeast(1L)
+                    } else {
+                        33L
+                    }
+                } else {
+                    33L
+                }
+            } catch (e: Exception) {
+                33L
+            } finally {
+                retriever.release()
+            }
+
+            withContext(Dispatchers.Main) {
+                frameStepMs = step
+            }
+        }
+    }
+
+    private fun setupZoomControls() {
+        scaleGestureDetector = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                val newScale = (playerZoomLevel * detector.scaleFactor).coerceIn(1f, 4f)
+                applyPlayerZoom(newScale)
+                return true
+            }
+        })
+
+        playerView.setOnTouchListener { _, event ->
+            if (event.actionMasked == MotionEvent.ACTION_UP && event.pointerCount <= 1) {
+                return@setOnTouchListener false
+            }
+            scaleGestureDetector.onTouchEvent(event)
+            true
+        }
+    }
+
+    private fun applyPlayerZoom(zoom: Float) {
+        playerZoomLevel = zoom
+        playerView.videoSurfaceView?.apply {
+            scaleX = zoom
+            scaleY = zoom
+            pivotX = width / 2f
+            pivotY = height / 2f
+        }
+    }
+
+    private fun resetPlayerZoom() {
+        applyPlayerZoom(1f)
+    }
+
+    private fun captureCurrentFrameInOriginalQuality() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val currentVideoUri = videoUri
+            if (currentVideoUri == null) {
+                withContext(Dispatchers.Main) { showError("Error loading video") }
+                return@launch
+            }
+
+            val inputPath = getFilePathFromUri(currentVideoUri) ?: currentVideoUri.path
+            if (inputPath.isNullOrEmpty()) {
+                withContext(Dispatchers.Main) { showError("Error loading video path") }
+                return@launch
+            }
+
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(inputPath)
+                val frameTimeUs = player.currentPosition * 1000
+                val originalFrame = retriever.getFrameAtTime(frameTimeUs, MediaMetadataRetriever.OPTION_CLOSEST)
+
+                if (originalFrame == null) {
+                    withContext(Dispatchers.Main) { showError("No fue posible capturar el frame") }
+                    return@launch
+                }
+
+                val outputDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                if (!outputDir.exists()) {
+                    outputDir.mkdirs()
+                }
+
+                val outputFile = File(outputDir, "frame_${System.currentTimeMillis()}.png")
+                FileOutputStream(outputFile).use { out ->
+                    originalFrame.compress(Bitmap.CompressFormat.PNG, 100, out)
+                }
+
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@VideoEditingActivity, getString(R.string.frame_captured), Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    showError("Error capturando frame: ${e.message}")
+                }
+            } finally {
+                retriever.release()
+            }
+        }
+    }
+
+    private fun updateHistoryButtonsState() {
+        btnUndo.isEnabled = undoHistory.isNotEmpty()
+        btnRedo.isEnabled = redoHistory.isNotEmpty()
+    }
+
+    private fun recordEditHistory(previousUri: Uri?, newUri: Uri?) {
+        if (previousUri == null || newUri == null || previousUri == newUri) {
+            updateHistoryButtonsState()
+            return
+        }
+        undoHistory.add(previousUri)
+        redoHistory.clear()
+        updateHistoryButtonsState()
+    }
+
+    private fun undoLastEdit() {
+        if (undoHistory.isEmpty() || videoUri == null) {
+            Toast.makeText(this, "No hay cambios para deshacer", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val currentUri = videoUri ?: return
+        val previousUri = undoHistory.removeLast()
+        redoHistory.add(currentUri)
+        applyHistoryVideo(previousUri)
+    }
+
+    private fun redoLastEdit() {
+        if (redoHistory.isEmpty() || videoUri == null) {
+            Toast.makeText(this, "No hay cambios para rehacer", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val currentUri = videoUri ?: return
+        val nextUri = redoHistory.removeLast()
+        undoHistory.add(currentUri)
+        applyHistoryVideo(nextUri)
+    }
+
+    private fun applyHistoryVideo(targetUri: Uri) {
+        videoUri = targetUri
+        val filePath = getFilePathFromUri(targetUri) ?: targetUri.path
+        if (!filePath.isNullOrEmpty()) {
+            tempInputFile = File(filePath)
+        }
+        persistAutoSavedProjectState(0L)
+        refreshPlayer()
+        refreshUI()
+        updateHistoryButtonsState()
     }
 
     private fun setupExoPlayer() {
-        videoUri = intent.getParcelableExtra("VIDEO_URI")
+        val intentVideoUri: Uri? = intent.getParcelableExtra("VIDEO_URI")
+        val openedProjectName = intent.getStringExtra("PROJECT_NAME")
+        val openedProjectPosition = intent.getLongExtra("PROJECT_POSITION", 0L)
+        val hasOpenedProjectPosition = intent.hasExtra("PROJECT_POSITION")
+        val openedProjectZoom = intent.getFloatExtra("PROJECT_ZOOM", 1f)
+        val hasOpenedProjectZoom = intent.hasExtra("PROJECT_ZOOM")
+
+        if (intentVideoUri != null) {
+            videoUri = intentVideoUri
+            hasPendingRestoredPlaybackState = hasOpenedProjectPosition || hasOpenedProjectZoom
+            projectPrefs.edit().apply {
+                putString(KEY_PROJECT_VIDEO_URI, intentVideoUri.toString())
+                if (hasOpenedProjectPosition) putLong(KEY_PROJECT_POSITION, openedProjectPosition)
+                if (hasOpenedProjectZoom) putFloat(KEY_PROJECT_ZOOM, openedProjectZoom)
+                if (!openedProjectName.isNullOrBlank()) putString(KEY_CURRENT_PROJECT_NAME, openedProjectName)
+            }.apply()
+        } else {
+            restoreAutoSavedProjectState()
+        }
+
         if (videoUri != null) {
             player = ExoPlayer.Builder(this).build()
             playerView.player = player
+            updateHistoryButtonsState()
 
             val mediaItem = MediaItem.fromUri(videoUri!!)
             player.setMediaItem(mediaItem)
+            updateFrameStepFromVideo(videoUri)
+            resetPlayerZoom()
             loadingScreen.visibility = View.VISIBLE
 
             player.prepare()
@@ -543,6 +1039,9 @@ class VideoEditingActivity : AppCompatActivity() {
                     if (state == Player.STATE_READY) {
                         isVideoLoaded = true
                         customVideoSeeker.setVideoDuration(player.duration)
+                        if (hasPendingRestoredPlaybackState) {
+                            applyRestoredPlaybackState()
+                        }
                         updateDurationDisplay(player.currentPosition.toInt(), player.duration.toInt())
                     }
                 }
@@ -577,6 +1076,39 @@ class VideoEditingActivity : AppCompatActivity() {
         }
     }
 
+
+
+    private fun resolveVideoSizeBytes(uri: Uri): Long {
+        if (uri.scheme == "file") {
+            val filePath = uri.path
+            if (!filePath.isNullOrEmpty()) {
+                val file = File(filePath)
+                if (file.exists()) return file.length().coerceAtLeast(0L)
+            }
+        }
+
+        try {
+            contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    if (sizeIndex != -1) {
+                        return cursor.getLong(sizeIndex).coerceAtLeast(0L)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("ProjectSize", "No se pudo leer tamaño por OpenableColumns: ${e.message}")
+        }
+
+        return try {
+            contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                pfd.statSize.takeIf { it >= 0L } ?: 0L
+            } ?: 0L
+        } catch (e: Exception) {
+            Log.e("ProjectSize", "No se pudo leer tamaño por FileDescriptor: ${e.message}")
+            0L
+        }
+    }
 
     private fun getFilePathFromUri(uri: Uri): String? {
         var filePath: String? = null
@@ -678,6 +1210,88 @@ class VideoEditingActivity : AppCompatActivity() {
         return String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
     }
 
+    private fun promptSaveProjectBeforeExit() {
+        if (!shouldPersistProjectState || isCurrentProjectSaved()) {
+            finish()
+            return
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.exit_editor_title))
+            .setMessage(getString(R.string.exit_editor_message))
+            .setPositiveButton(getString(R.string.save_project_exit)) { _, _ ->
+                shouldPersistProjectState = true
+                onSaveProjectClicked()
+            }
+            .setNegativeButton(getString(R.string.discard_project_exit)) { _, _ ->
+                shouldPersistProjectState = false
+                clearAutoSavedProjectState()
+                finish()
+            }
+            .setNeutralButton(getString(R.string.cancel), null)
+            .show()
+    }
+
+    private fun isCurrentProjectSaved(): Boolean {
+        val currentProjectName = projectPrefs.getString(KEY_CURRENT_PROJECT_NAME, null)
+            ?.trim()
+            .orEmpty()
+        if (currentProjectName.isBlank()) return false
+
+        val projectFile = File(
+            ProjectStorage.getInternalProjectsDir(this),
+            ProjectStorage.buildProjectFileName(currentProjectName)
+        )
+        return projectFile.exists()
+    }
+
+    private fun persistAutoSavedProjectState(positionOverride: Long? = null) {
+        val currentUri = videoUri?.toString() ?: return
+        val playbackPosition = positionOverride ?: if (::player.isInitialized) player.currentPosition else 0L
+
+        projectPrefs.edit()
+            .putString(KEY_PROJECT_VIDEO_URI, currentUri)
+            .putLong(KEY_PROJECT_POSITION, playbackPosition)
+            .putFloat(KEY_PROJECT_ZOOM, playerZoomLevel)
+            .apply()
+    }
+
+    private fun restoreAutoSavedProjectState() {
+        val savedUri = projectPrefs.getString(KEY_PROJECT_VIDEO_URI, null)
+        if (savedUri.isNullOrEmpty()) return
+
+        val savedFile = Uri.parse(savedUri)
+        val path = if (savedFile.scheme == "file") savedFile.path else getFilePathFromUri(savedFile)
+        if (path.isNullOrEmpty() || !File(path).exists()) {
+            clearAutoSavedProjectState()
+            return
+        }
+
+        videoUri = savedFile
+        hasPendingRestoredPlaybackState = true
+    }
+
+    private fun applyRestoredPlaybackState() {
+        val savedPosition = projectPrefs.getLong(KEY_PROJECT_POSITION, 0L)
+        val savedZoom = projectPrefs.getFloat(KEY_PROJECT_ZOOM, 1f)
+        if (savedPosition > 0L) {
+            player.seekTo(savedPosition)
+        }
+        applyPlayerZoom(savedZoom.coerceIn(1f, 4f))
+        hasPendingRestoredPlaybackState = false
+    }
+
+    private fun clearAutoSavedProjectState() {
+        projectPrefs.edit().clear().apply()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (shouldPersistProjectState) {
+            persistAutoSavedProjectState()
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         // Cancel all active FFmpeg sessions
@@ -687,7 +1301,16 @@ class VideoEditingActivity : AppCompatActivity() {
         activeFFmpegSessions.clear()
 
         // Release resources
-        player.release()
+        if (shouldPersistProjectState) {
+            persistAutoSavedProjectState()
+        }
+        exportProgressJob?.cancel()
+        dismissExportProgressDialog()
+        projectSaveProgressJob?.cancel()
+        dismissProjectSaveProgressDialog()
+        if (::player.isInitialized) {
+            player.release()
+        }
         coroutineScope.cancel()
     }
 
@@ -760,5 +1383,10 @@ class VideoEditingActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "VideoMetadata"
         private const val PICK_VIDEO_REQUEST = 1
+        private const val PROJECT_PREFS = "librecuts_project_prefs"
+        private const val KEY_PROJECT_VIDEO_URI = "project_video_uri"
+        private const val KEY_PROJECT_POSITION = "project_position"
+        private const val KEY_PROJECT_ZOOM = "project_zoom"
+        private const val KEY_CURRENT_PROJECT_NAME = "current_project_name"
     }
 }

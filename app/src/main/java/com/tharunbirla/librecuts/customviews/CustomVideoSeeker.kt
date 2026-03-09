@@ -38,10 +38,9 @@ class CustomVideoSeeker @JvmOverloads constructor(
         when (event.action) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
                 // Update the normalized seek position based on touch event
+                if (width <= 0) return false
                 seekPosition = (event.x / width).coerceIn(0f, 1f)
-                val seekTime = (videoDuration * seekPosition).toLong() // Calculate seek time in milliseconds
                 onSeekListener?.invoke(seekPosition) // Notify listener of the normalized position
-                onSeekListener?.invoke(seekTime.toFloat()) // Notify listener of the seek time
                 invalidate() // Redraw the view to update the seek line
                 return true
             }

@@ -15,8 +15,8 @@ android {
         applicationId "com.tharunbirla.librecuts"
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        versionCode 27
+        versionName "1.0.26"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
