@@ -1187,7 +1187,7 @@ class VideoEditingActivity : AppCompatActivity() {
     }
 
     private fun promptSaveProjectBeforeExit() {
-        if (!shouldPersistProjectState) {
+        if (!shouldPersistProjectState || isCurrentProjectSaved()) {
             finish()
             return
         }
@@ -1197,8 +1197,7 @@ class VideoEditingActivity : AppCompatActivity() {
             .setMessage(getString(R.string.exit_editor_message))
             .setPositiveButton(getString(R.string.save_project_exit)) { _, _ ->
                 shouldPersistProjectState = true
-                persistAutoSavedProjectState()
-                finish()
+                onSaveProjectClicked()
             }
             .setNegativeButton(getString(R.string.discard_project_exit)) { _, _ ->
                 shouldPersistProjectState = false
@@ -1207,6 +1206,19 @@ class VideoEditingActivity : AppCompatActivity() {
             }
             .setNeutralButton(getString(R.string.cancel), null)
             .show()
+    }
+
+    private fun isCurrentProjectSaved(): Boolean {
+        val currentProjectName = projectPrefs.getString(KEY_CURRENT_PROJECT_NAME, null)
+            ?.trim()
+            .orEmpty()
+        if (currentProjectName.isBlank()) return false
+
+        val projectFile = File(
+            ProjectStorage.getInternalProjectsDir(this),
+            ProjectStorage.buildProjectFileName(currentProjectName)
+        )
+        return projectFile.exists()
     }
 
     private fun persistAutoSavedProjectState(positionOverride: Long? = null) {

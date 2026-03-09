@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.25] - 2026-03-07
+### Changed
+- En el editor, al pulsar Home ahora se verifica si el proyecto ya fue guardado (`.lcp` existente):
+  - Si ya está guardado, se sale directamente.
+  - Si no está guardado, se solicita acción (guardar o descartar).
+- En la opción **Guardar** del modal de salida, ahora se ejecuta el flujo real de guardado de proyecto.
+
 ## [1.0.24] - 2026-03-07
 ### Changed
 - En Home el nombre del proyecto se fuerza a negrita también desde código en el adapter para asegurar consistencia visual en todos los dispositivos/temas.
